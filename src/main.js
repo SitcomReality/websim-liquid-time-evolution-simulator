@@ -91,14 +91,16 @@ class App {
         const now = performance.now();
         const deltaTime = 16; // Fixed timestep
         
-        // Update simulation
-        this.simulation.update(deltaTime);
+        // Update simulation (may skip rendering)
+        const shouldRender = this.simulation.update(deltaTime);
         
-        // Render
-        this.canvas.render();
+        // Only render if simulation says we should
+        if (shouldRender) {
+            this.canvas.render();
+        }
         
-        // Update graphs
-        this.graphs.update({ plants: 0, animals: 0 }); // TODO: count actual populations
+        // Always update graphs and stats
+        this.graphs.update({ plants: this.world.countParticles(8), animals: 0 });
         this.graphs.render();
         
         // Update stats
@@ -119,4 +121,3 @@ class App {
 
 // Start the app
 new App();
-

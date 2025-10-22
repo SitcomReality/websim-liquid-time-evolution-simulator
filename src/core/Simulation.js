@@ -5,16 +5,18 @@ export class Simulation {
         this.world = world;
         this.particleUpdater = new ParticleUpdater(world);
         this.timeScale = 1;
-        this.fidelity = 1.0; // Full fidelity by default
+        this.fidelity = 1.0;
         this.running = true;
         this.simulationTime = 0;
-        
-        this.mediumProcessCounter = 0;
-        this.slowProcessCounter = 0;
+        this.simulationSteps = 0;
         
         this.lastUpdate = performance.now();
         this.updateCount = 0;
         this.ups = 0;
+        
+        // Separate render rate from update rate
+        this.renderInterval = 1; // Render every N updates
+        this.updatesSinceRender = 0;
     }
     
     setTimeScale(scale) {
@@ -25,34 +27,20 @@ export class Simulation {
         this.fidelity = fidelity;
     }
     
-    update(frameDeltaTime) { // frameDeltaTime is time since last frame
-        if (!this.running) return;
+    update(frameDeltaTime) {
+        if (!this.running) return false; // Return false = don't render
         
-        const simulationDeltaTime = frameDeltaTime * this.timeScale;
+        // Calculate how many simulation steps to do based on time scale
+        // At high time scales, do multiple updates per frame
+        const stepsToRun = Math.max(1, Math.floor(this.timeScale / 10));
+        const simulationDeltaTime = frameDeltaTime * this.timeScale / stepsToRun;
         
-        // Fast processes (physics) - always run
-        this.particleUpdater.updateFastProcesses(this.fidelity, simulationDeltaTime);
-        
-        // Accumulate time for slower processes
-        this.mediumProcessCounter += simulationDeltaTime;
-        this.slowProcessCounter += simulationDeltaTime;
-        
-        // Medium processes (biology)
-        const mediumUpdateInterval = 50; // Run every 50ms of simulation time
-        if (this.mediumProcessCounter >= mediumUpdateInterval) {
-            this.particleUpdater.updateMediumProcesses(this.fidelity, this.mediumProcessCounter);
-            this.mediumProcessCounter = 0;
+        for (let i = 0; i < stepsToRun; i++) {
+            this.particleUpdater.update(this.fidelity, simulationDeltaTime);
+            this.simulationTime += simulationDeltaTime;
+            this.updateCount++;
+            this.simulationSteps++;
         }
-
-        // Slow processes (geology, etc) - not yet implemented
-        const slowUpdateInterval = 500; // Run every 500ms of simulation time
-        if (this.slowProcessCounter >= slowUpdateInterval) {
-            // this.particleUpdater.updateSlowProcesses(this.fidelity, this.slowProcessCounter);
-            this.slowProcessCounter = 0;
-        }
-        
-        this.simulationTime += simulationDeltaTime;
-        this.updateCount++;
         
         // Calculate UPS
         const now = performance.now();
@@ -61,6 +49,19 @@ export class Simulation {
             this.updateCount = 0;
             this.lastUpdate = now;
         }
+        
+        // Decide if we should render this frame
+        this.updatesSinceRender++;
+        
+        // At high time scales, render less frequently
+        this.renderInterval = Math.max(1, Math.floor(this.timeScale / 50));
+        
+        if (this.updatesSinceRender >= this.renderInterval) {
+            this.updatesSinceRender = 0;
+            return true; // Render this frame
+        }
+        
+        return false; // Skip rendering
     }
     
     togglePause() {

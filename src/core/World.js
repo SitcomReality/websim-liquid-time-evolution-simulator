@@ -8,73 +8,91 @@ export class World {
         
         // Use typed arrays for performance
         this.particles = new Uint8Array(this.size);
-        this.particleData = new Float32Array(this.size * 4); // extra data per particle
+        this.particleData = new Float32Array(this.size * 4);
         this.updated = new Uint8Array(this.size);
-        
-        // For efficient updates of special particles
-        this.plantIndices = new Set();
-        this.animalIndices = new Set();
         
         // Chunk system for optimization
         this.chunkSize = 16;
         this.chunksX = Math.ceil(width / this.chunkSize);
         this.chunksY = Math.ceil(height / this.chunkSize);
         this.activeChunks = new Set();
+        
+        // Track chunk activity to skip sleeping chunks
+        this.chunkSleepCounter = new Uint16Array(this.chunksX * this.chunksY);
+        this.chunkSleepThreshold = 60; // Frames of no activity before sleep
     }
     
     initialize(config) {
         this.particles.fill(PARTICLE_TYPES.EMPTY);
         this.particleData.fill(0);
-        this.plantIndices.clear();
-        this.animalIndices.clear();
         
         // Generate terrain
         this.generateTerrain(config);
     }
     
     generateTerrain(config) {
-        const { stonePercent, sandPercent, waterPercent, soilPercent, animalCount } = config;
+        const { stonePercent, sandPercent, waterPercent, soilPercent } = config;
         
-        // Create base stone layer with noise
-        for (let y = Math.floor(this.height * 0.5); y < this.height; y++) {
+        // Create more coherent terrain layers
+        // Stone base layer
+        const stoneLayerStart = Math.floor(this.height * 0.7);
+        for (let y = stoneLayerStart; y < this.height; y++) {
             for (let x = 0; x < this.width; x++) {
-                const noise = Math.sin(x * 0.05) * 10 + Math.cos(x * 0.03) * 15;
-                const threshold = this.height * 0.5 + noise;
-                
-                if (y > threshold) {
-                    const rand = Math.random() * 100;
-                    if (rand < stonePercent) {
-                        this.setParticle(x, y, PARTICLE_TYPES.STONE);
-                    } else if (rand < stonePercent + sandPercent) {
+                this.setParticle(x, y, PARTICLE_TYPES.STONE);
+            }
+        }
+        
+        // Add some variation to stone layer top with larger noise
+        for (let x = 0; x < this.width; x++) {
+            const noise = Math.sin(x * 0.02) * 20 + Math.cos(x * 0.015) * 15;
+            const topY = Math.floor(stoneLayerStart + noise);
+            for (let y = stoneLayerStart; y < topY && y < this.height; y++) {
+                this.setParticle(x, y, PARTICLE_TYPES.EMPTY);
+            }
+            for (let y = topY; y < this.height && y < topY + 5; y++) {
+                this.setParticle(x, y, PARTICLE_TYPES.SOIL);
+            }
+        }
+        
+        // Add sand in some areas
+        for (let x = 0; x < this.width; x++) {
+            if (Math.sin(x * 0.01) > 0.3) {
+                const sandDepth = Math.floor(Math.random() * 10 + 5);
+                const startY = stoneLayerStart - sandDepth;
+                for (let y = startY; y < stoneLayerStart && y >= 0; y++) {
+                    if (this.getParticle(x, y) === PARTICLE_TYPES.EMPTY) {
                         this.setParticle(x, y, PARTICLE_TYPES.SAND);
-                    } else if (rand < stonePercent + sandPercent + soilPercent) {
-                        this.setParticle(x, y, PARTICLE_TYPES.SOIL);
                     }
                 }
             }
         }
         
-        // Add water layer
-        const waterLevel = Math.floor(this.height * 0.6);
-        for (let y = waterLevel; y < this.height; y++) {
-            for (let x = 0; x < this.width; x++) {
-                if (this.getParticle(x, y) === PARTICLE_TYPES.EMPTY) {
-                    if (Math.random() * 100 < waterPercent) {
+        // Add water in coherent pools
+        const waterLevel = Math.floor(this.height * 0.55);
+        let inWater = false;
+        for (let x = 0; x < this.width; x++) {
+            // Create larger bodies of water
+            if (Math.random() < 0.05) inWater = !inWater;
+            
+            if (inWater) {
+                for (let y = waterLevel; y < this.height; y++) {
+                    if (this.getParticle(x, y) === PARTICLE_TYPES.EMPTY) {
                         this.setParticle(x, y, PARTICLE_TYPES.WATER);
+                    } else {
+                        break;
                     }
                 }
             }
         }
-
-        // Add animals
-        for (let i = 0; i < animalCount; i++) {
-            // Find a random valid spot on the ground
-            for (let tries = 0; tries < 100; tries++) {
-                const x = Math.floor(Math.random() * this.width);
-                const y = Math.floor(Math.random() * this.height * 0.6); // Start in upper part of world
-                if (this.getParticle(x, y) === PARTICLE_TYPES.EMPTY && this.getParticle(x, y + 1) !== PARTICLE_TYPES.EMPTY) {
-                    this.setParticle(x, y, PARTICLE_TYPES.ANIMAL, [100, 0, 0]); // energy, type, age
-                    break;
+        
+        // Plant some seeds in soil
+        for (let x = 0; x < this.width; x += 20) {
+            for (let y = 0; y < this.height - 1; y++) {
+                if (this.getParticle(x, y) === PARTICLE_TYPES.SOIL && 
+                    this.getParticle(x, y - 1) === PARTICLE_TYPES.EMPTY) {
+                    if (Math.random() < 0.3) {
+                        this.setParticle(x, y, PARTICLE_TYPES.PLANT, [0, 0, 0, 0]);
+                    }
                 }
             }
         }
@@ -96,26 +114,12 @@ export class World {
     setParticle(x, y, type, data = null) {
         if (!this.inBounds(x, y)) return;
         const idx = this.getIndex(x, y);
-
-        // Manage special particle indices
-        const oldType = this.particles[idx];
-        if (oldType === PARTICLE_TYPES.PLANT) this.plantIndices.delete(idx);
-        if (oldType === PARTICLE_TYPES.ANIMAL) this.animalIndices.delete(idx);
-
-        if (type === PARTICLE_TYPES.PLANT) this.plantIndices.add(idx);
-        if (type === PARTICLE_TYPES.ANIMAL) this.animalIndices.add(idx);
-
         this.particles[idx] = type;
 
-        const dataIdx = idx * 4;
         if (data) {
+            const dataIdx = idx * 4;
             for (let i = 0; i < data.length; i++) {
                 this.particleData[dataIdx + i] = data[i];
-            }
-        } else {
-            // Clear data if not provided
-            for (let i = 0; i < 4; i++) {
-                this.particleData[dataIdx + i] = 0;
             }
         }
         
@@ -132,25 +136,9 @@ export class World {
         const idx1 = this.getIndex(x1, y1);
         const idx2 = this.getIndex(x2, y2);
         
-        // Swap types
         const temp = this.particles[idx1];
         this.particles[idx1] = this.particles[idx2];
         this.particles[idx2] = temp;
-
-        // Swap data
-        const dataIdx1 = idx1 * 4;
-        const dataIdx2 = idx2 * 4;
-        for (let i = 0; i < 4; i++) {
-            const tempData = this.particleData[dataIdx1 + i];
-            this.particleData[dataIdx1 + i] = this.particleData[dataIdx2 + i];
-            this.particleData[dataIdx2 + i] = tempData;
-        }
-
-        // Manage special particle indices if swapped
-        if (this.plantIndices.has(idx1)) { this.plantIndices.delete(idx1); this.plantIndices.add(idx2); }
-        else if (this.plantIndices.has(idx2)) { this.plantIndices.delete(idx2); this.plantIndices.add(idx1); }
-        if (this.animalIndices.has(idx1)) { this.animalIndices.delete(idx1); this.animalIndices.add(idx2); }
-        else if (this.animalIndices.has(idx2)) { this.animalIndices.delete(idx2); this.animalIndices.add(idx1); }
         
         this.markChunkActive(x1, y1);
         this.markChunkActive(x2, y2);
@@ -171,7 +159,33 @@ export class World {
         if (!this.inBounds(x, y)) return;
         const chunkX = Math.floor(x / this.chunkSize);
         const chunkY = Math.floor(y / this.chunkSize);
-        this.activeChunks.add(chunkY * this.chunksX + chunkX);
+        const chunkId = chunkY * this.chunksX + chunkX;
+        this.activeChunks.add(chunkId);
+        this.chunkSleepCounter[chunkId] = 0; // Reset sleep counter
+    }
+    
+    updateChunkSleep() {
+        // Increment sleep counters for inactive chunks
+        for (let i = 0; i < this.chunkSleepCounter.length; i++) {
+            if (!this.activeChunks.has(i)) {
+                this.chunkSleepCounter[i] = Math.min(
+                    this.chunkSleepCounter[i] + 1,
+                    this.chunkSleepThreshold
+                );
+            }
+        }
+    }
+    
+    isChunkAsleep(chunkId) {
+        return this.chunkSleepCounter[chunkId] >= this.chunkSleepThreshold;
+    }
+    
+    countParticles(type) {
+        let count = 0;
+        for (let i = 0; i < this.size; i++) {
+            if (this.particles[i] === type) count++;
+        }
+        return count;
     }
     
     clearUpdated() {

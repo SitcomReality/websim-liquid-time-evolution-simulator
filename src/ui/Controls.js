@@ -61,7 +61,6 @@ export class Controls {
                 'ice': PARTICLE_TYPES.ICE,
                 'steam': PARTICLE_TYPES.STEAM,
                 'plant': PARTICLE_TYPES.PLANT,
-                'animal': PARTICLE_TYPES.ANIMAL,
                 'erase': PARTICLE_TYPES.EMPTY
             };
             this.brushType = typeMap[e.target.value];
@@ -107,14 +106,8 @@ export class Controls {
 
                     if (this.brushType === PARTICLE_TYPES.PLANT) {
                         if (this.world.getParticle(px, py) === PARTICLE_TYPES.SOIL) {
-                             // data: [energy, type(0=seed), age]
+                             // data: [0:energy, 1:type(0=seed), 2:age]
                             this.world.setParticle(px, py, this.brushType, [0, 0, 0]);
-                        }
-                    } else if (this.brushType === PARTICLE_TYPES.ANIMAL) {
-                        // Place only if space is empty and on solid ground
-                        if (this.world.getParticle(px, py) === PARTICLE_TYPES.EMPTY && this.world.getParticle(px, py + 1) !== PARTICLE_TYPES.EMPTY) {
-                             // data: [energy, type, age]
-                            this.world.setParticle(px, py, this.brushType, [100, 0, 0]);
                         }
                     } else {
                         this.world.setParticle(px, py, this.brushType);

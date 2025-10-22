@@ -3,21 +3,26 @@ import { PARTICLE_TYPES, PARTICLE_PROPERTIES } from '../utils/Constants.js';
 export class ParticleUpdater {
     constructor(world) {
         this.world = world;
+        this.erosionAccumulator = 0;
+        this.weatheringAccumulator = 0;
     }
     
-    updateFastProcesses(fidelity, deltaTime) {
+    update(fidelity, deltaTime) {
         this.world.clearUpdated();
         
         const activeChunks = Array.from(this.world.activeChunks);
         this.world.activeChunks.clear();
 
+        // Skip sleeping chunks for fast physics
+        const awakeChunks = activeChunks.filter(id => !this.world.isChunkAsleep(id));
+        
         // Shuffle chunks to avoid directional bias
-        for (let i = activeChunks.length - 1; i > 0; i--) {
+        for (let i = awakeChunks.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
-            [activeChunks[i], activeChunks[j]] = [activeChunks[j], activeChunks[i]];
+            [awakeChunks[i], awakeChunks[j]] = [awakeChunks[j], awakeChunks[i]];
         }
         
-        for (const chunkId of activeChunks) {
+        for (const chunkId of awakeChunks) {
             const chunkX = chunkId % this.world.chunksX;
             const chunkY = Math.floor(chunkId / this.world.chunksX);
 
@@ -30,13 +35,12 @@ export class ParticleUpdater {
             for (let y = endY - 1; y >= startY; y--) {
                 const dir = Math.random() > 0.5 ? 1 : -1;
                 const xStart = dir > 0 ? startX : endX - 1;
-                const xEnd = dir > 0 ? endX : -1;
-                if (xEnd < -1) continue; // safety for endX=0
+                const xEnd = dir > 0 ? endX : startX - 1;
                 
-                for (let x = xStart; x !== xEnd; x += dir) {
+                for (let x = xStart; dir > 0 ? x < xEnd : x > xEnd; x += dir) {
                     if (this.world.isUpdated(x, y)) continue;
 
-                    // Fidelity check
+                    // Fidelity check - skip some particles for performance
                     if (Math.random() > fidelity) continue;
                     
                     const particle = this.world.getParticle(x, y);
@@ -46,30 +50,29 @@ export class ParticleUpdater {
                 }
             }
         }
+        
+        this.world.updateChunkSleep();
 
-        // Slow updates are not chunked and happen randomly across the map
-        // The number of updates scales with world size and fidelity
-        const slowUpdateCount = Math.ceil((this.world.size / 1000) * fidelity);
-        for (let i = 0; i < slowUpdateCount; i++) {
-            this.updateSlowProcesses(deltaTime);
+        // Geological processes scale with time
+        this.erosionAccumulator += deltaTime;
+        this.weatheringAccumulator += deltaTime;
+        
+        // Run erosion periodically (scales with simulation time)
+        if (this.erosionAccumulator > 100) {
+            const erosionCount = Math.ceil((this.world.size / 5000) * fidelity);
+            for (let i = 0; i < erosionCount; i++) {
+                this.updateErosion();
+            }
+            this.erosionAccumulator = 0;
         }
-    }
-
-    updateMediumProcesses(fidelity, deltaTime) {
-        // Update all plants
-        for (const idx of this.world.plantIndices) {
-            if (Math.random() > fidelity) continue;
-            const x = idx % this.world.width;
-            const y = Math.floor(idx / this.world.width);
-            this.updatePlant(x, y, deltaTime);
-        }
-
-        // Update all animals
-        for (const idx of this.world.animalIndices) {
-             if (Math.random() > fidelity) continue;
-            const x = idx % this.world.width;
-            const y = Math.floor(idx / this.world.width);
-            this.updateAnimal(x, y, deltaTime);
+        
+        // Run weathering/slow processes
+        if (this.weatheringAccumulator > 50) {
+            const slowUpdateCount = Math.ceil((this.world.size / 2000) * fidelity);
+            for (let i = 0; i < slowUpdateCount; i++) {
+                this.updateSlowProcesses(deltaTime);
+            }
+            this.weatheringAccumulator = 0;
         }
     }
     
@@ -90,14 +93,47 @@ export class ParticleUpdater {
             case PARTICLE_TYPES.SOIL:
                 this.updateSoil(x, y);
                 break;
-            case PARTICLE_TYPES.ANIMAL:
-                this.updateFallingSolid(x, y); // Animals are subject to gravity
-                break;
         }
     }
 
     updateSlowProcesses(deltaTime) {
-        // Future home for geology, etc.
+        const x = Math.floor(Math.random() * this.world.width);
+        const y = Math.floor(Math.random() * this.world.height);
+
+        const particleType = this.world.getParticle(x, y);
+        
+        if (particleType === PARTICLE_TYPES.PLANT) {
+            this.updatePlant(x, y, deltaTime);
+        } else if (particleType === PARTICLE_TYPES.STONE) {
+            // Stone weathering into soil
+            const above = this.world.getParticle(x, y - 1);
+            if ((above === PARTICLE_TYPES.EMPTY || above === PARTICLE_TYPES.WATER) && Math.random() < 0.0001) {
+                this.world.setParticle(x, y, PARTICLE_TYPES.SOIL);
+            }
+        }
+    }
+    
+    updateErosion() {
+        // Water erodes stone/soil over time
+        const x = Math.floor(Math.random() * this.world.width);
+        const y = Math.floor(Math.random() * this.world.height);
+        
+        if (this.world.getParticle(x, y) === PARTICLE_TYPES.WATER) {
+            // Check for erodible material below or beside
+            for (let dx = -1; dx <= 1; dx++) {
+                for (let dy = 0; dy <= 1; dy++) {
+                    const nx = x + dx;
+                    const ny = y + dy;
+                    const neighbor = this.world.getParticle(nx, ny);
+                    
+                    if (neighbor === PARTICLE_TYPES.SOIL && Math.random() < 0.01) {
+                        this.world.setParticle(nx, ny, PARTICLE_TYPES.SAND);
+                    } else if (neighbor === PARTICLE_TYPES.STONE && Math.random() < 0.001) {
+                        this.world.setParticle(nx, ny, PARTICLE_TYPES.SOIL);
+                    }
+                }
+            }
+        }
     }
     
     updateFallingSolid(x, y) {
@@ -124,16 +160,6 @@ export class ParticleUpdater {
     }
     
     updateLiquid(x, y) {
-        // Reduce jitter: check if stable before moving
-        if (
-            this.world.getParticle(x, y + 1) !== PARTICLE_TYPES.EMPTY &&
-            this.world.getParticle(x - 1, y) !== PARTICLE_TYPES.EMPTY &&
-            this.world.getParticle(x + 1, y) !== PARTICLE_TYPES.EMPTY
-        ) {
-            // If surrounded, small chance to check for updates anyway
-            if (Math.random() > 0.1) return;
-        }
-
         const below = this.world.getParticle(x, y + 1);
         
         // Fall down
@@ -143,7 +169,16 @@ export class ParticleUpdater {
             return;
         }
         
-        // Spread horizontally - check both sides to settle faster
+        // Only spread if not settled
+        const leftBelow = this.world.getParticle(x - 1, y + 1);
+        const rightBelow = this.world.getParticle(x + 1, y + 1);
+        
+        if (leftBelow !== PARTICLE_TYPES.EMPTY && rightBelow !== PARTICLE_TYPES.EMPTY) {
+            // Likely settled - skip horizontal spread to save CPU
+            return;
+        }
+        
+        // Spread horizontally
         const dir = Math.random() > 0.5 ? 1 : -1;
         let side = this.world.getParticle(x + dir, y);
         if (side === PARTICLE_TYPES.EMPTY) {
@@ -224,125 +259,67 @@ export class ParticleUpdater {
     }
 
     updatePlant(x, y, deltaTime) {
-        const idx = this.world.getIndex(x, y);
-        const dataIdx = idx * 4;
-        let energy = this.world.particleData[dataIdx];
-        let type = this.world.particleData[dataIdx + 1]; // 0:seed, 1:stem
-        let age = this.world.particleData[dataIdx + 2];
+        const idx = this.world.getIndex(x, y) * 4;
+        let energy = this.world.particleData[idx];
+        let type = this.world.particleData[idx + 1];
+        let age = this.world.particleData[idx + 2];
 
-        const timeFactor = deltaTime / 50; // Normalize to medium update interval
+        // Scale growth by actual simulation time
+        const timeFactor = deltaTime / 16;
         age += timeFactor;
-        this.world.particleData[dataIdx + 2] = age;
+        this.world.particleData[idx + 2] = age;
 
-        // Photosynthesis: gain energy if near the surface
-        if (this.world.getParticle(x, y - 1) === PARTICLE_TYPES.EMPTY || this.world.getParticle(x, y-2) === PARTICLE_TYPES.EMPTY) {
-            energy += 1 * timeFactor;
+        // Photosynthesis
+        if (this.world.getParticle(x, y - 1) === PARTICLE_TYPES.EMPTY) {
+            energy += 0.5 * timeFactor; // Faster energy gain
         }
 
-        // Consume water from nearby soil/water
-        for (let dy = 0; dy <= 1; dy++) {
-            for (let dx = -1; dx <= 1; dx++) {
-                if(this.world.getParticle(x + dx, y + dy) === PARTICLE_TYPES.WATER) {
-                    energy += 0.5 * timeFactor;
-                    if(Math.random() < 0.01 * timeFactor) this.world.setParticle(x+dx, y+dy, PARTICLE_TYPES.SOIL);
+        // Water absorption from nearby
+        for (let dx = -1; dx <= 1; dx++) {
+            for (let dy = -1; dy <= 1; dy++) {
+                if (this.world.getParticle(x + dx, y + dy) === PARTICLE_TYPES.WATER) {
+                    energy += 0.2 * timeFactor;
+                    if (Math.random() < 0.02 * timeFactor) {
+                        this.world.setParticle(x + dx, y + dy, PARTICLE_TYPES.EMPTY);
+                    }
                     break;
                 }
             }
         }
 
-
         if (type === 0) { // Seed
-            if (energy > 5) { // Sprout
-                this.world.particleData[dataIdx + 1] = 1; // Become stem
+            if (energy > 3) {
+                this.world.particleData[idx + 1] = 1;
                 energy = 0;
-                // Grow a stem immediately above if possible
                 if (this.world.getParticle(x, y - 1) === PARTICLE_TYPES.EMPTY) {
                     this.world.setParticle(x, y - 1, PARTICLE_TYPES.PLANT, [0, 1, 0, 0]);
                 }
             }
         } else if (type === 1) { // Stem
             // Grow upwards
-            const height = this.getPlantHeight(x, y);
-            if (energy > (10 + height * 2) && this.world.getParticle(x, y - 1) === PARTICLE_TYPES.EMPTY && height < 8) {
+            if (energy > 5 && this.world.getParticle(x, y - 1) === PARTICLE_TYPES.EMPTY) {
                 this.world.setParticle(x, y - 1, PARTICLE_TYPES.PLANT, [0, 1, 0, 0]);
                 energy = 0;
             }
-        }
-
-        // Die of old age or if buried
-        if (age > 500 || this.world.getParticle(x, y - 1) === PARTICLE_TYPES.STONE) {
-            this.world.setParticle(x, y, PARTICLE_TYPES.SOIL); // turns to soil
-            return;
-        }
-
-        this.world.particleData[dataIdx] = energy;
-    }
-
-    getPlantHeight(x, startY) {
-        let y = startY;
-        let height = 0;
-        while(this.world.getParticle(x, y) === PARTICLE_TYPES.PLANT) {
-            height++;
-            y++;
-        }
-        return height;
-    }
-
-    updateAnimal(x, y, deltaTime) {
-        const dataIdx = this.world.getIndex(x, y) * 4;
-        let energy = this.world.particleData[dataIdx];
-        let age = this.world.particleData[dataIdx + 2];
-
-        const timeFactor = deltaTime / 50;
-        age += timeFactor;
-        energy -= 0.5 * timeFactor; // Metabolism
-
-        // Wander
-        if (Math.random() < 0.5) {
-            const dir = Math.random() > 0.5 ? 1 : -1;
-            const nx = x + dir;
-            // Move if empty and supported
-            if (this.world.getParticle(nx, y) === PARTICLE_TYPES.EMPTY && this.world.getParticle(nx, y+1) !== PARTICLE_TYPES.EMPTY) {
-                this.world.swapParticles(x, y, nx, y);
-                x = nx; // update position for rest of logic
-            }
-        }
-
-        // Eat plants
-        for (let dy = -1; dy <= 1; dy++) {
-            for (let dx = -1; dx <= 1; dx++) {
-                if (dx === 0 && dy === 0) continue;
-                const nx = x + dx;
-                const ny = y + dy;
-                if (this.world.getParticle(nx, ny) === PARTICLE_TYPES.PLANT) {
-                    this.world.setParticle(nx, ny, PARTICLE_TYPES.EMPTY);
-                    energy += 25;
-                    break;
-                }
-            }
-        }
-        
-        // Reproduce
-        if (energy > 200) {
-            energy = 100;
-            for (let dy = -1; dy <= 1; dy++) {
-                for (let dx = -1; dx <= 1; dx++) {
+            
+            // Spread seeds
+            if (age > 200 && Math.random() < 0.001 * timeFactor) {
+                for (let dx = -10; dx <= 10; dx++) {
                     const nx = x + dx;
-                    const ny = y + dy;
-                    if (this.world.getParticle(nx, ny) === PARTICLE_TYPES.EMPTY) {
-                        this.world.setParticle(nx, ny, PARTICLE_TYPES.ANIMAL, [100, 0, 0]);
-                        break;
+                    const ny = y + Math.floor(Math.random() * 5);
+                    if (this.world.getParticle(nx, ny) === PARTICLE_TYPES.SOIL) {
+                        this.world.setParticle(nx, ny, PARTICLE_TYPES.PLANT, [0, 0, 0, 0]);
                     }
                 }
             }
         }
 
-        // Die
-        if (energy <= 0 || age > 800) {
+        // Death
+        if (age > 500 || this.world.getParticle(x, y - 1) === PARTICLE_TYPES.STONE) {
             this.world.setParticle(x, y, PARTICLE_TYPES.SOIL);
-        } else {
-            this.world.particleData[dataIdx] = energy;
-            this.world.particleData[dataIdx + 2] = age;
+            return;
         }
+
+        this.world.particleData[idx] = energy;
     }
 }
