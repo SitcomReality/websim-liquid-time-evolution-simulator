@@ -9,6 +9,7 @@ import { ErosionUpdater } from './updaters/ErosionUpdater.js';
 import { SlowProcessesUpdater } from './updaters/SlowProcessesUpdater.js';
 import { ThermalUpdater } from './updaters/ThermalUpdater.js';
 import { GeologicalUpdater } from './updaters/GeologicalUpdater.js';
+import { IceUpdater } from './updaters/IceUpdater.js';
 
 export class ParticleUpdater {
     constructor(world) {
@@ -23,6 +24,7 @@ export class ParticleUpdater {
         this.steamUpdater = new SteamUpdater(world);
         this.soilUpdater = new SoilUpdater(world);
         this.plantUpdater = new PlantUpdater(world);
+        this.iceUpdater = new IceUpdater(world);
 
         // New modular updaters
         this.erosionUpdater = new ErosionUpdater(world);
@@ -121,6 +123,9 @@ export class ParticleUpdater {
                 break;
             case PARTICLE_TYPES.SOIL:
                 this.soilUpdater.update(x, y);
+                break;
+            case PARTICLE_TYPES.ICE:
+                this.iceUpdater.update(x, y);
                 break;
             case PARTICLE_TYPES.PLANT:
                 this.plantUpdater.update(x, y, deltaTime);

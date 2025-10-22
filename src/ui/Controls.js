@@ -61,6 +61,7 @@ export class Controls {
                 'ice': PARTICLE_TYPES.ICE,
                 'steam': PARTICLE_TYPES.STEAM,
                 'plant': PARTICLE_TYPES.PLANT,
+                'animal': PARTICLE_TYPES.ANIMAL,
                 'erase': PARTICLE_TYPES.EMPTY
             };
             this.brushType = typeMap[e.target.value];
@@ -125,6 +126,14 @@ export class Controls {
                         }
                     } else {
                         this.world.setParticle(px, py, this.brushType);
+                        // Set temperature for certain brush types
+                        if (this.brushType === PARTICLE_TYPES.ICE) {
+                            this.world.setTemperature(px, py, -10);
+                        } else if (this.brushType === PARTICLE_TYPES.LAVA) {
+                            this.world.setTemperature(px, py, 1300);
+                        } else if (this.brushType === PARTICLE_TYPES.STEAM) {
+                            this.world.setTemperature(px, py, 110);
+                        }
                     }
                 }
             }

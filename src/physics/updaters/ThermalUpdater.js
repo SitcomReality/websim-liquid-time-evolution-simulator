@@ -75,12 +75,19 @@ export class ThermalUpdater {
             case PARTICLE_TYPES.ICE:
                 if (temp > TEMPERATURE.ICE_POINT) {
                     this.world.setParticle(x, y, PARTICLE_TYPES.WATER);
+                    // Absorb latent heat of fusion, cooling the spot significantly.
+                    // This makes melting a much slower process for large bodies of ice.
+                    const newTemp = this.world.getTemperature(x, y) - 80;
+                    this.world.setTemperature(x, y, newTemp);
                 }
                 break;
             
             case PARTICLE_TYPES.WATER:
                 if (temp < TEMPERATURE.ICE_POINT) {
                     this.world.setParticle(x, y, PARTICLE_TYPES.ICE);
+                    // Release latent heat of fusion. Set temp to freezing point
+                    // as the water/ice mixture stays at 0°C until fully frozen.
+                    this.world.setTemperature(x, y, TEMPERATURE.ICE_POINT);
                 } else if (temp > TEMPERATURE.WATER_BOILING) {
                     this.world.setParticle(x, y, PARTICLE_TYPES.STEAM);
                 }
