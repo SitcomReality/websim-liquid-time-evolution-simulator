@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Liquid Time - Evolution Simulator</title>
+    <link rel="stylesheet" href="styles/main.css">
+    <link rel="stylesheet" href="styles/ui.css">
+    <link rel="stylesheet" href="styles/graphs.css">
+</head>
+<body>
+    <div id="app">
+        <canvas id="worldCanvas"></canvas>
+        
+        <div id="controls">
+            <div class="control-group">
+                <label>Time Scale</label>
+                <input type="range" id="timeScale" min="0" max="100" value="10" step="1">
+                <span id="timeScaleValue">1x</span>
+            </div>
+            
+            <div class="control-group">
+                <button id="playPause">⏸️ Pause</button>
+                <button id="reset">🔄 Reset</button>
+                <button id="newGame">🎮 New Game</button>
+            </div>
+            
+            <div class="control-group">
+                <label>Brush</label>
+                <select id="brushType">
+                    <option value="sand">Sand</option>
+                    <option value="water">Water</option>
+                    <option value="stone">Stone</option>
+                    <option value="soil">Soil</option>
+                    <option value="lava">Lava</option>
+                    <option value="ice">Ice</option>
+                    <option value="steam">Steam</option>
+                    <option value="plant">Plant Seed</option>
+                </select>
+                <input type="range" id="brushSize" min="1" max="20" value="5">
+            </div>
+            
+            <div class="stats">
+                <div>FPS: <span id="fps">0</span></div>
+                <div>Updates/s: <span id="ups">0</span></div>
+                <div>Time: <span id="elapsedTime">0</span>y</div>
+            </div>
+        </div>
+        
+        <div id="graphs">
+            <canvas id="populationGraph"></canvas>
+        </div>
+        
+        <div id="newGameModal" class="modal hidden">
+            <div class="modal-content">
+                <h2>New World</h2>
+                <div class="modal-body">
+                    <div class="slider-group">
+                        <label>World Width</label>
+                        <input type="range" id="worldWidth" min="200" max="800" value="400" step="50">
+                        <span id="widthValue">400</span>
+                    </div>
+                    <div class="slider-group">
+                        <label>World Height</label>
+                        <input type="range" id="worldHeight" min="150" max="600" value="300" step="50">
+                        <span id="heightValue">300</span>
+                    </div>
+                    <div class="slider-group">
+                        <label>Stone %</label>
+                        <input type="range" id="stonePercent" min="0" max="100" value="60">
+                        <span id="stoneValue">60%</span>
+                    </div>
+                    <div class="slider-group">
+                        <label>Sand %</label>
+                        <input type="range" id="sandPercent" min="0" max="100" value="20">
+                        <span id="sandValue">20%</span>
+                    </div>
+                    <div class="slider-group">
+                        <label>Water %</label>
+                        <input type="range" id="waterPercent" min="0" max="100" value="15">
+                        <span id="waterValue">15%</span>
+                    </div>
+                    <div class="slider-group">
+                        <label>Soil %</label>
+                        <input type="range" id="soilPercent" min="0" max="100" value="5">
+                        <span id="soilValue">5%</span>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button id="cancelNewGame">Cancel</button>
+                    <button id="confirmNewGame" class="primary">Create World</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script type="importmap">
+    {
+      "imports": {
+        "three": "https://esm.sh/three@0.160.0"
+      }
+    }
+    </script>
+    <script type="module" src="src/main.js"></script>
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js/v8c78df7c7c0f484497ecbca7046644da1771523124516" integrity="sha512-8DS7rgIrAmghBFwoOTujcf6D9rXvH8xm8JQ1Ja01h9QX8EzXldiszufYa4IFfKdLUKTTrnSFXLDkUEOTrZQ8Qg==" data-cf-beacon='{"version":"2024.11.0","token":"4c6229722a6346bc8eb5cb0e5eae5d41","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
+</body>
+</html>
+
