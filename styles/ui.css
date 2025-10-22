@@ -53,6 +53,11 @@ button.primary {
     border-color: #0066ff;
 }
 
+button.active {
+    background: #0066ff;
+    border-color: #0066ff;
+}
+
 button.primary:hover {
     background: #0052cc;
 }
@@ -130,4 +135,3 @@ button.primary:hover {
     gap: 10px;
     justify-content: flex-end;
 }
-

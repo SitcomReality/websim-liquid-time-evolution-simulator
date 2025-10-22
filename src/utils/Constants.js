@@ -36,6 +36,30 @@ export const PARTICLE_PROPERTIES = {
     [PARTICLE_TYPES.ANIMAL]: { density: 1.0, fluid: false, fallSpeed: 0 }
 };
 
+// Temperature constants (in Celsius)
+export const TEMPERATURE = {
+    ABSOLUTE_ZERO: -273,
+    ICE_POINT: 0,
+    WATER_BOILING: 100,
+    LAVA_SOLIDIFY: 700,
+    STONE_MELTING: 1200,
+    AMBIENT: 20
+};
+
+// Thermal properties for each particle type
+export const THERMAL_PROPERTIES = {
+    [PARTICLE_TYPES.EMPTY]: { conductivity: 0.024, heatCapacity: 1.0 }, // Air
+    [PARTICLE_TYPES.SAND]: { conductivity: 0.25, heatCapacity: 0.8 },
+    [PARTICLE_TYPES.WATER]: { conductivity: 0.6, heatCapacity: 4.2 },
+    [PARTICLE_TYPES.STONE]: { conductivity: 2.0, heatCapacity: 0.9 },
+    [PARTICLE_TYPES.SOIL]: { conductivity: 0.5, heatCapacity: 1.2 },
+    [PARTICLE_TYPES.LAVA]: { conductivity: 4.0, heatCapacity: 1.0 },
+    [PARTICLE_TYPES.ICE]: { conductivity: 2.2, heatCapacity: 2.1 },
+    [PARTICLE_TYPES.STEAM]: { conductivity: 0.024, heatCapacity: 2.0 },
+    [PARTICLE_TYPES.PLANT]: { conductivity: 0.4, heatCapacity: 3.0 },
+    [PARTICLE_TYPES.ANIMAL]: { conductivity: 0.5, heatCapacity: 3.5 }
+};
+
 export const TIME_SCALES = {
     REAL_TIME: 1,
     HOURS: 10,
@@ -45,4 +69,3 @@ export const TIME_SCALES = {
     CENTURIES: 2000,
     MILLENNIA: 10000
 };
-

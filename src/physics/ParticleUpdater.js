@@ -7,6 +7,8 @@ import { SoilUpdater } from './updaters/SoilUpdater.js';
 import { PlantUpdater } from './updaters/PlantUpdater.js';
 import { ErosionUpdater } from './updaters/ErosionUpdater.js';
 import { SlowProcessesUpdater } from './updaters/SlowProcessesUpdater.js';
+import { ThermalUpdater } from './updaters/ThermalUpdater.js';
+import { GeologicalUpdater } from './updaters/GeologicalUpdater.js';
 
 export class ParticleUpdater {
     constructor(world) {
@@ -25,10 +27,15 @@ export class ParticleUpdater {
         // New modular updaters
         this.erosionUpdater = new ErosionUpdater(world);
         this.slowUpdater = new SlowProcessesUpdater(world);
+        this.thermalUpdater = new ThermalUpdater(world);
+        this.geologicalUpdater = new GeologicalUpdater(world);
     }
     
     update(fidelity, deltaTime) {
         this.world.clearUpdated();
+        
+        // Update thermodynamics
+        this.thermalUpdater.update(fidelity, deltaTime);
         
         const activeChunks = Array.from(this.world.activeChunks);
         this.world.activeChunks.clear();
@@ -74,6 +81,8 @@ export class ParticleUpdater {
         this.world.updateChunkSleep();
 
         // Geological processes scale with time
+        this.geologicalUpdater.update(deltaTime, fidelity);
+        
         this.erosionAccumulator += deltaTime;
         this.weatheringAccumulator += deltaTime;
         

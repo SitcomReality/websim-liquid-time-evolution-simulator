@@ -1,4 +1,4 @@
-import { PARTICLE_TYPES } from '../utils/Constants.js';
+import { PARTICLE_TYPES, TEMPERATURE } from '../utils/Constants.js';
 
 export class World {
     constructor(width, height) {
@@ -10,6 +10,20 @@ export class World {
         this.particles = new Uint8Array(this.size);
         this.particleData = new Float32Array(this.size * 4);
         this.updated = new Uint8Array(this.size);
+        
+        // Thermodynamics - use lower resolution for performance
+        this.thermalResolution = 4; // 1 thermal cell per 4x4 pixels
+        this.thermalWidth = Math.ceil(width / this.thermalResolution);
+        this.thermalHeight = Math.ceil(height / this.thermalResolution);
+        this.thermalSize = this.thermalWidth * this.thermalHeight;
+        
+        this.temperature = new Float32Array(this.thermalSize);
+        this.pressure = new Float32Array(this.thermalSize);
+        this.tempBuffer = new Float32Array(this.thermalSize); // For diffusion
+        
+        // Initialize to ambient temperature
+        this.temperature.fill(TEMPERATURE.AMBIENT);
+        this.pressure.fill(1.0); // 1 atm
         
         // Chunk system for optimization
         this.chunkSize = 16;
@@ -25,6 +39,8 @@ export class World {
     initialize(config) {
         this.particles.fill(PARTICLE_TYPES.EMPTY);
         this.particleData.fill(0);
+        this.temperature.fill(TEMPERATURE.AMBIENT);
+        this.pressure.fill(1.0);
         
         // Generate terrain
         this.generateTerrain(config);
@@ -85,6 +101,13 @@ export class World {
             }
         }
         
+        // Add some deep heat sources (potential volcanoes)
+        for (let i = 0; i < 3; i++) {
+            const x = Math.floor(Math.random() * this.width);
+            const y = Math.floor(this.height * 0.85 + Math.random() * this.height * 0.1);
+            this.setTemperature(x, y, 1400);
+        }
+        
         // Plant some seeds in soil
         for (let x = 0; x < this.width; x += 20) {
             for (let y = 0; y < this.height - 1; y++) {
@@ -96,6 +119,32 @@ export class World {
                 }
             }
         }
+    }
+    
+    getThermalIndex(x, y) {
+        const tx = Math.floor(x / this.thermalResolution);
+        const ty = Math.floor(y / this.thermalResolution);
+        return ty * this.thermalWidth + tx;
+    }
+    
+    getTemperature(x, y) {
+        if (!this.inBounds(x, y)) return TEMPERATURE.AMBIENT;
+        return this.temperature[this.getThermalIndex(x, y)];
+    }
+    
+    setTemperature(x, y, temp) {
+        if (!this.inBounds(x, y)) return;
+        this.temperature[this.getThermalIndex(x, y)] = temp;
+    }
+    
+    getPressure(x, y) {
+        if (!this.inBounds(x, y)) return 1.0;
+        return this.pressure[this.getThermalIndex(x, y)];
+    }
+    
+    setPressure(x, y, press) {
+        if (!this.inBounds(x, y)) return;
+        this.pressure[this.getThermalIndex(x, y)] = press;
     }
     
     getIndex(x, y) {

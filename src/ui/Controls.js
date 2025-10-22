@@ -4,7 +4,7 @@ export class Controls {
     constructor(world, simulation, canvas) {
         this.world = world;
         this.simulation = simulation;
-        this.canvas = canvas.canvas;
+        this.canvas = canvas;
         
         this.brushType = PARTICLE_TYPES.SAND;
         this.brushSize = 5;
@@ -15,21 +15,21 @@ export class Controls {
     
     setupEventListeners() {
         // Mouse/touch drawing
-        this.canvas.addEventListener('mousedown', (e) => this.startDrawing(e));
-        this.canvas.addEventListener('mousemove', (e) => this.draw(e));
-        this.canvas.addEventListener('mouseup', () => this.stopDrawing());
-        this.canvas.addEventListener('mouseleave', () => this.stopDrawing());
+        this.canvas.canvas.addEventListener('mousedown', (e) => this.startDrawing(e));
+        this.canvas.canvas.addEventListener('mousemove', (e) => this.draw(e));
+        this.canvas.canvas.addEventListener('mouseup', () => this.stopDrawing());
+        this.canvas.canvas.addEventListener('mouseleave', () => this.stopDrawing());
         
         // Touch support
-        this.canvas.addEventListener('touchstart', (e) => {
+        this.canvas.canvas.addEventListener('touchstart', (e) => {
             e.preventDefault();
             this.startDrawing(e.touches[0]);
         });
-        this.canvas.addEventListener('touchmove', (e) => {
+        this.canvas.canvas.addEventListener('touchmove', (e) => {
             e.preventDefault();
             this.draw(e.touches[0]);
         });
-        this.canvas.addEventListener('touchend', () => this.stopDrawing());
+        this.canvas.canvas.addEventListener('touchend', () => this.stopDrawing());
         
         // Time scale
         const timeScaleSlider = document.getElementById('timeScale');
@@ -76,6 +76,20 @@ export class Controls {
             const running = this.simulation.togglePause();
             document.getElementById('playPause').textContent = running ? '⏸️ Pause' : '▶️ Play';
         });
+        
+        // Temperature overlay
+        document.getElementById('tempOverlay').addEventListener('click', () => {
+            this.canvas.toggleTemperatureOverlay();
+            document.getElementById('tempOverlay').classList.toggle('active');
+            document.getElementById('pressOverlay').classList.remove('active');
+        });
+        
+        // Pressure overlay
+        document.getElementById('pressOverlay').addEventListener('click', () => {
+            this.canvas.togglePressureOverlay();
+            document.getElementById('pressOverlay').classList.toggle('active');
+            document.getElementById('tempOverlay').classList.remove('active');
+        });
     }
     
     startDrawing(e) {
@@ -90,7 +104,7 @@ export class Controls {
     draw(e) {
         if (!this.isDrawing) return;
         
-        const rect = this.canvas.getBoundingClientRect();
+        const rect = this.canvas.canvas.getBoundingClientRect();
         const scaleX = this.world.width / rect.width;
         const scaleY = this.world.height / rect.height;
         
