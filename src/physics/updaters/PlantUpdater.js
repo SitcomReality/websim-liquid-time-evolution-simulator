@@ -62,7 +62,7 @@ export class PlantUpdater {
         }
 
         // Death
-        if (age > 500 || this.world.getParticle(x, y - 1) === PARTICLE_TYPES.STONE) {
+        if (age > 500 || (this.world.getParticle(x, y - 1) !== PARTICLE_TYPES.EMPTY && this.world.getParticle(x,y-1) !== PARTICLE_TYPES.PLANT)) {
             this.world.setParticle(x, y, PARTICLE_TYPES.SOIL);
             return;
         }

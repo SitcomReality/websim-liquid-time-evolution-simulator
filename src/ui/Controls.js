@@ -55,7 +55,8 @@ export class Controls {
             const typeMap = {
                 'sand': PARTICLE_TYPES.SAND,
                 'water': PARTICLE_TYPES.WATER,
-                'stone': PARTICLE_TYPES.STONE,
+                'granite': PARTICLE_TYPES.GRANITE,
+                'basalt': PARTICLE_TYPES.BASALT,
                 'soil': PARTICLE_TYPES.SOIL,
                 'lava': PARTICLE_TYPES.LAVA,
                 'ice': PARTICLE_TYPES.ICE,
@@ -124,7 +125,7 @@ export class Controls {
                              // data: [0:energy, 1:type(0=seed), 2:age]
                             this.world.setParticle(px, py, this.brushType, [0, 0, 0]);
                         }
-                    } else {
+                    } else if (this.brushType !== PARTICLE_TYPES.EMPTY) {
                         this.world.setParticle(px, py, this.brushType);
                         // Set temperature for certain brush types
                         if (this.brushType === PARTICLE_TYPES.ICE) {
@@ -134,6 +135,9 @@ export class Controls {
                         } else if (this.brushType === PARTICLE_TYPES.STEAM) {
                             this.world.setTemperature(px, py, 110);
                         }
+                    } else {
+                        // Erase
+                        this.world.setParticle(px, py, this.brushType);
                     }
                 }
             }

@@ -49,24 +49,40 @@ export class World {
     generateTerrain(config) {
         const { stonePercent, sandPercent, waterPercent, soilPercent } = config;
         
-        // Create more coherent terrain layers
-        // Stone base layer
-        const stoneLayerStart = Math.floor(this.height * 0.7);
-        for (let y = stoneLayerStart; y < this.height; y++) {
+        // Bedrock layer at the very bottom
+        for (let y = this.height - 10; y < this.height; y++) {
             for (let x = 0; x < this.width; x++) {
-                this.setParticle(x, y, PARTICLE_TYPES.STONE);
+                this.setParticle(x, y, PARTICLE_TYPES.BEDROCK);
             }
         }
         
-        // Add some variation to stone layer top with larger noise
+        // Mantle layer
+        const mantleLayerStart = Math.floor(this.height * 0.8);
+        for (let y = mantleLayerStart; y < this.height - 10; y++) {
+            for (let x = 0; x < this.width; x++) {
+                this.setParticle(x, y, PARTICLE_TYPES.MANTLE);
+            }
+        }
+        
+        // Granite crust
+        const crustLayerStart = Math.floor(this.height * 0.5);
+        for (let y = crustLayerStart; y < mantleLayerStart; y++) {
+            for (let x = 0; x < this.width; x++) {
+                this.setParticle(x, y, PARTICLE_TYPES.GRANITE);
+            }
+        }
+        
+        // Add some variation to crust layer top with larger noise
         for (let x = 0; x < this.width; x++) {
             const noise = Math.sin(x * 0.02) * 20 + Math.cos(x * 0.015) * 15;
-            const topY = Math.floor(stoneLayerStart + noise);
-            for (let y = stoneLayerStart; y < topY && y < this.height; y++) {
+            const topY = Math.floor(crustLayerStart + noise);
+            for (let y = crustLayerStart; y < topY && y < this.height; y++) {
                 this.setParticle(x, y, PARTICLE_TYPES.EMPTY);
             }
-            for (let y = topY; y < this.height && y < topY + 5; y++) {
-                this.setParticle(x, y, PARTICLE_TYPES.SOIL);
+             for (let y = topY; y < mantleLayerStart && y < topY + 5; y++) {
+                if (this.getParticle(x, y) === PARTICLE_TYPES.GRANITE) {
+                    this.setParticle(x, y, PARTICLE_TYPES.SOIL);
+                }
             }
         }
         
@@ -74,8 +90,8 @@ export class World {
         for (let x = 0; x < this.width; x++) {
             if (Math.sin(x * 0.01) > 0.3) {
                 const sandDepth = Math.floor(Math.random() * 10 + 5);
-                const startY = stoneLayerStart - sandDepth;
-                for (let y = startY; y < stoneLayerStart && y >= 0; y++) {
+                const startY = crustLayerStart - sandDepth;
+                for (let y = startY; y < crustLayerStart && y >= 0; y++) {
                     if (this.getParticle(x, y) === PARTICLE_TYPES.EMPTY) {
                         this.setParticle(x, y, PARTICLE_TYPES.SAND);
                     }
@@ -84,7 +100,7 @@ export class World {
         }
         
         // Add water in coherent pools
-        const waterLevel = Math.floor(this.height * 0.55);
+        const waterLevel = Math.floor(this.height * 0.4);
         let inWater = false;
         for (let x = 0; x < this.width; x++) {
             // Create larger bodies of water
@@ -94,18 +110,24 @@ export class World {
                 for (let y = waterLevel; y < this.height; y++) {
                     if (this.getParticle(x, y) === PARTICLE_TYPES.EMPTY) {
                         this.setParticle(x, y, PARTICLE_TYPES.WATER);
-                    } else {
+                    } else if (this.getParticle(x,y) !== PARTICLE_TYPES.WATER) {
                         break;
                     }
                 }
             }
         }
         
-        // Add some deep heat sources (potential volcanoes)
-        for (let i = 0; i < 3; i++) {
-            const x = Math.floor(Math.random() * this.width);
-            const y = Math.floor(this.height * 0.85 + Math.random() * this.height * 0.1);
-            this.setTemperature(x, y, 1400);
+        // Initialize temperature gradient
+        for (let y = 0; y < this.height; y++) {
+            const depthRatio = y / this.height;
+            // Temp increases with depth, from ambient at surface to very hot in mantle
+            const temp = TEMPERATURE.AMBIENT + depthRatio * depthRatio * 1800;
+             for (let x = 0; x < this.width; x++) {
+                const currentTemp = this.getTemperature(x, y);
+                if (temp > currentTemp) {
+                    this.setTemperature(x, y, temp);
+                }
+            }
         }
         
         // Plant some seeds in soil
@@ -156,7 +178,7 @@ export class World {
     }
     
     getParticle(x, y) {
-        if (!this.inBounds(x, y)) return PARTICLE_TYPES.STONE;
+        if (!this.inBounds(x, y)) return PARTICLE_TYPES.BEDROCK;
         return this.particles[this.getIndex(x, y)];
     }
     

@@ -99,8 +99,8 @@ export class ThermalUpdater {
                 }
                 break;
             
-            case PARTICLE_TYPES.STONE:
-                if (temp > TEMPERATURE.STONE_MELTING) {
+            case PARTICLE_TYPES.GRANITE:
+                if (temp > TEMPERATURE.GRANITE_MELTING) {
                     this.world.setParticle(x, y, PARTICLE_TYPES.LAVA);
                     // Add heat when melting
                     this.world.setTemperature(x, y, temp + 50);
@@ -109,7 +109,7 @@ export class ThermalUpdater {
             
             case PARTICLE_TYPES.LAVA:
                 if (temp < TEMPERATURE.LAVA_SOLIDIFY) {
-                    this.world.setParticle(x, y, PARTICLE_TYPES.STONE);
+                    this.world.setParticle(x, y, PARTICLE_TYPES.BASALT);
                     // Remove heat when solidifying
                     this.world.setTemperature(x, y, temp - 50);
                 }

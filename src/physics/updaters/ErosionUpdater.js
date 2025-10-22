@@ -27,9 +27,10 @@ export class ErosionUpdater {
         // Real erosion logic (uses constants from world code)
         const PARTICLE_TYPES = {
             SOIL: 4,
-            STONE: 3,
+            GRANITE: 3,
             WATER: 2,
-            SAND: 1
+            SAND: 1,
+            BASALT: 10
         };
 
         if (this.world.getParticle(x, y) === PARTICLE_TYPES.WATER) {
@@ -41,7 +42,7 @@ export class ErosionUpdater {
 
                     if (neighbor === PARTICLE_TYPES.SOIL && Math.random() < 0.01 * fidelity) {
                         this.world.setParticle(nx, ny, PARTICLE_TYPES.SAND);
-                    } else if (neighbor === PARTICLE_TYPES.STONE && Math.random() < 0.001 * fidelity) {
+                    } else if ((neighbor === PARTICLE_TYPES.GRANITE || neighbor === PARTICLE_TYPES.BASALT) && Math.random() < 0.001 * fidelity) {
                         this.world.setParticle(nx, ny, PARTICLE_TYPES.SOIL);
                     }
                 }

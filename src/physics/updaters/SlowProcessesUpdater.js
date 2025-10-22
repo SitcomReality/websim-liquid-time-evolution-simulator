@@ -15,7 +15,7 @@ export class SlowProcessesUpdater {
             // plants handled elsewhere often, but keep a slow tick here
             // delegate to plant updater if available on world/updater side
             // noop: PlantUpdater already called in regular updates
-        } else if (particleType === PARTICLE_TYPES.STONE) {
+        } else if (particleType === PARTICLE_TYPES.GRANITE || particleType === PARTICLE_TYPES.BASALT) {
             // Stone weathering into soil (rare)
             const above = this.world.getParticle(x, y - 1);
             if ((above === PARTICLE_TYPES.EMPTY || above === PARTICLE_TYPES.WATER) && Math.random() < 0.0001 * fidelity) {
