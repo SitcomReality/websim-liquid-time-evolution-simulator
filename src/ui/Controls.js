@@ -41,6 +41,15 @@ export class Controls {
             timeScaleValue.textContent = `${scale.toFixed(1)}x`;
         });
         
+        // Fidelity
+        const fidelitySlider = document.getElementById('fidelity');
+        const fidelityValue = document.getElementById('fidelityValue');
+        fidelitySlider.addEventListener('input', (e) => {
+            const value = parseInt(e.target.value);
+            this.simulation.setFidelity(value / 100);
+            fidelityValue.textContent = `${value}%`;
+        });
+
         // Brush type
         document.getElementById('brushType').addEventListener('change', (e) => {
             const typeMap = {
@@ -51,7 +60,9 @@ export class Controls {
                 'lava': PARTICLE_TYPES.LAVA,
                 'ice': PARTICLE_TYPES.ICE,
                 'steam': PARTICLE_TYPES.STEAM,
-                'plant': PARTICLE_TYPES.PLANT
+                'plant': PARTICLE_TYPES.PLANT,
+                'animal': PARTICLE_TYPES.ANIMAL,
+                'erase': PARTICLE_TYPES.EMPTY
             };
             this.brushType = typeMap[e.target.value];
         });
@@ -91,10 +102,25 @@ export class Controls {
         for (let dy = -this.brushSize; dy <= this.brushSize; dy++) {
             for (let dx = -this.brushSize; dx <= this.brushSize; dx++) {
                 if (dx * dx + dy * dy <= this.brushSize * this.brushSize) {
-                    this.world.setParticle(x + dx, y + dy, this.brushType);
+                    const px = x + dx;
+                    const py = y + dy;
+
+                    if (this.brushType === PARTICLE_TYPES.PLANT) {
+                        if (this.world.getParticle(px, py) === PARTICLE_TYPES.SOIL) {
+                             // data: [energy, type(0=seed), age]
+                            this.world.setParticle(px, py, this.brushType, [0, 0, 0]);
+                        }
+                    } else if (this.brushType === PARTICLE_TYPES.ANIMAL) {
+                        // Place only if space is empty and on solid ground
+                        if (this.world.getParticle(px, py) === PARTICLE_TYPES.EMPTY && this.world.getParticle(px, py + 1) !== PARTICLE_TYPES.EMPTY) {
+                             // data: [energy, type, age]
+                            this.world.setParticle(px, py, this.brushType, [100, 0, 0]);
+                        }
+                    } else {
+                        this.world.setParticle(px, py, this.brushType);
+                    }
                 }
             }
         }
     }
 }
-

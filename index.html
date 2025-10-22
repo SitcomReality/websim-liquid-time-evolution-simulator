@@ -20,6 +20,12 @@
             </div>
             
             <div class="control-group">
+                <label>Fidelity</label>
+                <input type="range" id="fidelity" min="10" max="100" value="100" step="10">
+                <span id="fidelityValue">100%</span>
+            </div>
+            
+            <div class="control-group">
                 <button id="playPause">⏸️ Pause</button>
                 <button id="reset">🔄 Reset</button>
                 <button id="newGame">🎮 New Game</button>
@@ -36,6 +42,8 @@
                     <option value="ice">Ice</option>
                     <option value="steam">Steam</option>
                     <option value="plant">Plant Seed</option>
+                    <option value="animal">Animal</option>
+                    <option value="erase">Erase</option>
                 </select>
                 <input type="range" id="brushSize" min="1" max="20" value="5">
             </div>
@@ -85,6 +93,11 @@
                         <input type="range" id="soilPercent" min="0" max="100" value="5">
                         <span id="soilValue">5%</span>
                     </div>
+                    <div class="slider-group">
+                        <label>Animals</label>
+                        <input type="range" id="animalCount" min="0" max="50" value="10">
+                        <span id="animalValue">10</span>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button id="cancelNewGame">Cancel</button>
@@ -105,4 +118,3 @@
 <script defer src="https://static.cloudflareinsights.com/beacon.min.js/v8c78df7c7c0f484497ecbca7046644da1771523124516" integrity="sha512-8DS7rgIrAmghBFwoOTujcf6D9rXvH8xm8JQ1Ja01h9QX8EzXldiszufYa4IFfKdLUKTTrnSFXLDkUEOTrZQ8Qg==" data-cf-beacon='{"version":"2024.11.0","token":"4c6229722a6346bc8eb5cb0e5eae5d41","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
 </body>
 </html>
-
