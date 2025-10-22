@@ -19,10 +19,10 @@ export class LiquidUpdater {
         const leftBelow = this.world.getParticle(x - 1, y + 1);
         const rightBelow = this.world.getParticle(x + 1, y + 1);
         
-        if (leftBelow !== PARTICLE_TYPES.EMPTY && rightBelow !== PARTICLE_TYPES.EMPTY) {
-            // Likely settled - skip horizontal spread to save CPU
-            return;
-        }
+        // if (leftBelow !== PARTICLE_TYPES.EMPTY && rightBelow !== PARTICLE_TYPES.EMPTY) {
+        //     // Likely settled - skip horizontal spread to save CPU
+        //     return;
+        // }
         
         // Spread horizontally
         const dir = Math.random() > 0.5 ? 1 : -1;
@@ -47,4 +47,3 @@ export class LiquidUpdater {
         }
     }
 }
-
