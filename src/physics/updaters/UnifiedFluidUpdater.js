@@ -133,17 +133,18 @@ export class UnifiedFluidUpdater {
     }
 
     flattenFluid(x, y, particle, props) {
-        // Specifically for low-viscosity fluids to spread out
+        // Specifically for low-viscosity fluids to spread out horizontally.
+        // This is applied when vertical/diagonal movement is blocked (particle is supported).
         const dir = Math.random() > 0.5 ? 1 : -1;
         
         for (const d of [dir, -dir]) {
             const nx = x + d;
-            // Check if there is empty space to the side and no support underneath it
             const side = this.world.getParticle(nx, y);
-            const sideBelow = this.world.getParticle(nx, y + 1);
             
-            if (side === PARTICLE_TYPES.EMPTY && sideBelow === PARTICLE_TYPES.EMPTY) {
-                if (Math.random() < 0.8) { // High chance to spread
+            // Allow flow into adjacent empty space to level out the surface, 
+            // regardless of what lies below (which gravity checks handle later).
+            if (side === PARTICLE_TYPES.EMPTY) {
+                if (Math.random() < 0.95) { // Very high chance to spread horizontally for low viscosity fluids
                     this.world.swapParticles(x, y, nx, y);
                     this.world.setUpdated(nx, y);
                     return; // Return after one move
