@@ -14,6 +14,64 @@ export class PlantUpdater {
 
         // If plant has only void beneath it, make it fall as dirt or seed
         const below = this.world.getParticle(x, y + 1);
+        const currentParticle = this.world.getParticle(x, y);
+        const isInWater = currentParticle === PARTICLE_TYPES.PLANT && (below === PARTICLE_TYPES.WATER || this.world.getParticle(x, y) === PARTICLE_TYPES.WATER);
+        // If plant is in water: seeds should float up to surface; stems should sink to attach to substrate
+        if (isInWater) {
+            // read seed/stem type stored in data (0 = seed, 1 = stem)
+            const seedType = this.world.particleData[idx + 1] || 0;
+            if (seedType === 0) {
+                // Seed: try to float upward toward surface; if stuck too long, dissolve
+                if (this.world.getParticle(x, y - 1) === PARTICLE_TYPES.EMPTY) {
+                    this.world.swapParticles(x, y, x, y - 1);
+                    this.world.setUpdated(x, y - 1);
+                    // gently age toward dissolution if repeatedly underwater
+                    if (Math.random() < 0.005) this.world.particleData[idx] += 0.5;
+                } else {
+                    // If seed has been underwater too long, dissolve
+                    if ((this.world.particleData[idx] || 0) > 1200) {
+                        this.world.setParticle(x, y, PARTICLE_TYPES.EMPTY);
+                        return;
+                    }
+                }
+                return;
+            } else {
+                // Stem / established plant: seek substrate below to anchor underwater
+                const maxSearch = 12;
+                let attached = false;
+                for (let d = 1; d <= maxSearch; d++) {
+                    const ny = y + d;
+                    if (ny >= this.world.height - 1) break;
+                    const belowCheck = this.world.getParticle(x, ny + 1);
+                    const candidate = this.world.getParticle(x, ny);
+                    if (belowCheck === PARTICLE_TYPES.SOIL || belowCheck === PARTICLE_TYPES.SAND || belowCheck === PARTICLE_TYPES.GRANITE || belowCheck === PARTICLE_TYPES.BASALT) {
+                        // place plant directly above substrate if space available
+                        const targetY = ny;
+                        if (this.world.getParticle(x, targetY) === PARTICLE_TYPES.WATER || this.world.getParticle(x, targetY) === PARTICLE_TYPES.EMPTY) {
+                            this.world.setParticle(x, targetY, PARTICLE_TYPES.PLANT, [0, 1, 0, this.world.particleData[idx + 3] || 0]);
+                            this.world.setParticle(x, y, PARTICLE_TYPES.WATER);
+                            this.world.setUpdated(x, targetY);
+                            attached = true;
+                        }
+                        break;
+                    }
+                    // continue searching down through water
+                }
+                if (!attached) {
+                    // No substrate found nearby: degrade to seed (float) with some chance, or slowly die
+                    if (Math.random() < 0.08) {
+                        this.world.particleData[idx + 1] = 0; // become seed
+                        // slightly cool/damage to indicate weakening
+                        this.world.particleData[idx] = (this.world.particleData[idx] || 0) + 20;
+                    } else if ((this.world.particleData[idx + 2] || 0) > 800) {
+                        // old plant without attachment dies into soil
+                        this.world.setParticle(x, y, PARTICLE_TYPES.SOIL);
+                    }
+                }
+                return;
+            }
+        }
+
         // Allow plants to persist on edges: only fall if fully unsupported (air both below AND below-diagonals)
         if (below === PARTICLE_TYPES.EMPTY &&
             this.world.getParticle(x - 1, y + 1) === PARTICLE_TYPES.EMPTY &&
