@@ -36,6 +36,10 @@ export class World {
         this.windWidth = this.airflow.windWidth;
         this.windHeight = this.airflow.windHeight;
         this.windSize = this.airflow.windSize;
+        // Expose wind field arrays so updaters can read/write them safely
+        this.windVx = this.airflow.windVx;
+        this.windVy = this.airflow.windVy;
+        this.windBuffer = this.airflow.windBuffer;
 
         // Chunk config
         this.chunkSize = this.chunkManager.chunkSize;
