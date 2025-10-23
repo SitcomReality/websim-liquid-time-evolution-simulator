@@ -22,7 +22,13 @@
     </div>
 
     <div id="app" class="hidden">
-        <canvas id="worldCanvas"></canvas>
+        <div id="mainPane">
+            <canvas id="worldCanvas"></canvas>
+            
+            <div id="graphs">
+                <canvas id="populationGraph"></canvas>
+            </div>
+        </div>
         
         <div id="controls">
             <div class="control-group">
@@ -87,10 +93,6 @@
                 <div>Updates/s: <span id="ups">0</span></div>
                 <div>Time: <span id="elapsedTime">0</span>y</div>
             </div>
-        </div>
-        
-        <div id="graphs">
-            <canvas id="populationGraph"></canvas>
         </div>
     </div>
         
