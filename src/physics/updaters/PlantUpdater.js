@@ -23,14 +23,15 @@ export class PlantUpdater {
             // read seed/stem type stored in data (0 = seed, 1 = stem)
             const seedType = this.world.particleData[idx + 1] || 0;
             if (seedType === 0) {
-                // Seed: try to float upward toward surface; if stuck too long, dissolve
-                if (this.world.getParticle(x, y - 1) === PARTICLE_TYPES.EMPTY) {
-                    this.world.swapParticles(x, y, x, y - 1);
-                    this.world.setUpdated(x, y - 1);
-                    // gently age toward dissolution if repeatedly underwater
+                // Seed: sink downward toward substrate while underwater; age/dissolve if stuck too long
+                if (this.world.getParticle(x, y + 1) === PARTICLE_TYPES.WATER || this.world.getParticle(x, y + 1) === PARTICLE_TYPES.EMPTY) {
+                    // move seed downward (sink)
+                    this.world.swapParticles(x, y, x, y + 1);
+                    this.world.setUpdated(x, y + 1);
+                    // gently age while sinking to eventually dissolve if never finding substrate
                     if (Math.random() < 0.005) this.world.particleData[idx] += 0.5;
                 } else {
-                    // If seed has been underwater too long, dissolve
+                    // If seed has been underwater too long without finding substrate, dissolve
                     if ((this.world.particleData[idx] || 0) > 1200) {
                         this.world.setParticle(x, y, PARTICLE_TYPES.EMPTY);
                         return;
