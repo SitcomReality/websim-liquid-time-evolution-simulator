@@ -1,4 +1,5 @@
 import { PARTICLE_TYPES, TEMPERATURE } from '../utils/Constants.js';
+import { generateScenarioTerrain } from './terrain/Scenario.js';
 
 export class World {
     constructor(width, height) {
@@ -43,7 +44,7 @@ export class World {
         this.pressure.fill(1.0);
         
         // Generate terrain
-        this.generateTerrain(config);
+        generateScenarioTerrain(this, config);
     }
     
     generateTerrain(config) {
