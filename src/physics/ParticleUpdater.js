@@ -53,6 +53,9 @@ export class ParticleUpdater {
             [awakeChunks[i], awakeChunks[j]] = [awakeChunks[j], awakeChunks[i]];
         }
         
+        // Pass time scale for viscous flow calculations
+        const timeScale = deltaTime / 16; // Normalize to frame time
+        
         for (const chunkId of awakeChunks) {
             const chunkX = chunkId % this.world.chunksX;
             const chunkY = Math.floor(chunkId / this.world.chunksX);
@@ -77,7 +80,7 @@ export class ParticleUpdater {
                     const particle = this.world.getParticle(x, y);
                     if (particle === PARTICLE_TYPES.EMPTY) continue;
                     
-                    this.updateParticle(x, y, particle, deltaTime);
+                    this.updateParticle(x, y, particle, deltaTime, timeScale);
                 }
             }
         }
@@ -110,10 +113,10 @@ export class ParticleUpdater {
         // Primordials handled in main loop via manager
     }
     
-    updateParticle(x, y, type, deltaTime) {
+    updateParticle(x, y, type, deltaTime, timeScale) {
         switch(type) {
             case PARTICLE_TYPES.SAND:
-                this.fallingUpdater.update(x, y);
+                this.fallingUpdater.update(x, y, timeScale);
                 break;
             case PARTICLE_TYPES.WATER:
                 this.liquidUpdater.update(x, y);
@@ -125,9 +128,7 @@ export class ParticleUpdater {
                 this.steamUpdater.update(x, y);
                 break;
             case PARTICLE_TYPES.SOIL:
-                // Soil should behave like other falling solids (settle/gravity)
-                this.fallingUpdater.update(x, y);
-                // Keep occasional slow processes handled elsewhere; don't block falling
+                this.fallingUpdater.update(x, y, timeScale);
                 break;
             case PARTICLE_TYPES.ICE:
                 this.iceUpdater.update(x, y);

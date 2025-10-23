@@ -1,4 +1,4 @@
-import { PARTICLE_TYPES } from '../../utils/Constants.js';
+import { PARTICLE_TYPES, PARTICLE_PROPERTIES } from '../../utils/Constants.js';
 
 export class GeologicalUpdater {
     constructor(world) {
@@ -14,6 +14,43 @@ export class GeologicalUpdater {
             this.applyTectonicForces(fidelity);
             this.formVolcanoes(fidelity);
             this.tectonicForceAccumulator = 0;
+        }
+        
+        // Viscous creep: even solid rock flows slowly at geological timescales
+        this.applyViscousCreep(deltaTime, fidelity);
+    }
+    
+    applyViscousCreep(deltaTime, fidelity) {
+        // Make deep/pressurized stone flow like a very viscous fluid
+        const sampleCount = Math.ceil(10 * fidelity);
+        
+        for (let i = 0; i < sampleCount; i++) {
+            const x = Math.floor(Math.random() * this.world.width);
+            const y = Math.floor(this.world.height * 0.5 + Math.random() * this.world.height * 0.4);
+            
+            const particle = this.world.getParticle(x, y);
+            if (particle !== PARTICLE_TYPES.GRANITE && particle !== PARTICLE_TYPES.BASALT && particle !== PARTICLE_TYPES.MANTLE) continue;
+            
+            const pressure = this.world.getPressure(x, y);
+            const temp = this.world.getTemperature(x, y);
+            
+            // High pressure + high temp = more fluid behavior
+            const fluidityFactor = (pressure - 1.0) * (temp / 1000);
+            if (fluidityFactor > 0.5 && Math.random() < fluidityFactor * 0.1) {
+                // Flow toward lower pressure
+                const pl = this.world.getPressure(x - 1, y);
+                const pr = this.world.getPressure(x + 1, y);
+                const dir = pl > pr ? 1 : -1;
+                
+                const nx = x + dir;
+                const neighbor = this.world.getParticle(nx, y);
+                const neighborProps = PARTICLE_PROPERTIES[neighbor];
+                const currentProps = PARTICLE_PROPERTIES[particle];
+                
+                if (neighbor === PARTICLE_TYPES.EMPTY || (neighborProps && currentProps.density > neighborProps.density)) {
+                    this.world.swapParticles(x, y, nx, y);
+                }
+            }
         }
     }
 
