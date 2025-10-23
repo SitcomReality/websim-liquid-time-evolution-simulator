@@ -15,14 +15,19 @@ export class Primordial {
     }
 
     generateOffsets() {
-        const offsets = [];
+        const minUnique = 5;
+        const desired = Math.max(minUnique, Math.floor(this.size));
+        const set = new Set();
         const radius = Math.sqrt(this.size);
-        for (let i = 0; i < this.size; i++) {
+        // Ensure we get 'desired' unique integer offsets
+        while (set.size < desired) {
             const angle = Math.random() * Math.PI * 2;
             const r = radius * Math.sqrt(Math.random());
-            offsets.push({ x: Math.floor(Math.cos(angle) * r), y: Math.floor(Math.sin(angle) * r) });
+            const ox = Math.floor(Math.cos(angle) * r);
+            const oy = Math.floor(Math.sin(angle) * r);
+            set.add(`${ox},${oy}`);
         }
-        return offsets;
+        return Array.from(set).map(s => { const [x,y]=s.split(',').map(Number); return {x,y}; });
     }
 
     update(world) {
