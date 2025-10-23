@@ -14,16 +14,16 @@ export class PlantUpdater {
 
         // If plant has only void beneath it, make it fall as dirt or seed
         const below = this.world.getParticle(x, y + 1);
-        if (below === PARTICLE_TYPES.EMPTY) {
-            // Fall down: either become a seed or soil when falling
-            if (Math.random() < 0.5) {
-                // place a seed below
+        // Allow plants to persist on edges: only fall if fully unsupported (air both below AND below-diagonals)
+        if (below === PARTICLE_TYPES.EMPTY &&
+            this.world.getParticle(x - 1, y + 1) === PARTICLE_TYPES.EMPTY &&
+            this.world.getParticle(x + 1, y + 1) === PARTICLE_TYPES.EMPTY) {
+            // Prefer turning into seed if high above ground, otherwise settle as soil to avoid spamming void
+            if (Math.random() < 0.35) {
                 this.world.setParticle(x, y + 1, PARTICLE_TYPES.PLANT, [0, 0, 0, 0]);
             } else {
-                // become soil (dirt) and drop down
                 this.world.setParticle(x, y + 1, PARTICLE_TYPES.SOIL);
             }
-            // remove current plant pixel
             this.world.setParticle(x, y, PARTICLE_TYPES.EMPTY);
             this.world.setUpdated(x, y + 1);
             return;
@@ -40,30 +40,49 @@ export class PlantUpdater {
         }
 
         // Photosynthesis
-        if (this.world.getParticle(x, y - 1) === PARTICLE_TYPES.EMPTY) {
-            energy += 0.5 * timeFactor; // Faster energy gain
+        // Allow photosynthesis when at least part of canopy is exposed (not strictly empty above).
+        const above = this.world.getParticle(x, y - 1);
+        const canopyExposed = (above === PARTICLE_TYPES.EMPTY || above === PARTICLE_TYPES.STEAM || above === PARTICLE_TYPES.CLOUD);
+        if (canopyExposed) {
+            energy += 0.45 * timeFactor; // robust but slightly reduced from previous aggressive gain
+        } else {
+            // Even shaded plants slowly photosynthesize (overcast/under-canopy)
+            energy += 0.05 * timeFactor;
         }
 
-        // Water absorption from nearby
-        for (let dx = -1; dx <= 1; dx++) {
-            for (let dy = -1; dy <= 1; dy++) {
-                if (this.world.getParticle(x + dx, y + dy) === PARTICLE_TYPES.WATER) {
-                    energy += 0.2 * timeFactor;
-                    if (Math.random() < 0.02 * timeFactor) {
-                        this.world.setParticle(x + dx, y + dy, PARTICLE_TYPES.EMPTY);
+        // Water absorption from a slightly larger neighborhood (roots/wicking)
+        let absorbed = false;
+        for (let dx = -2; dx <= 2 && !absorbed; dx++) {
+            for (let dy = 0; dy <= 2 && !absorbed; dy++) { // prefer water below and at same level
+                const px = x + dx, py = y + dy;
+                if (this.world.getParticle(px, py) === PARTICLE_TYPES.WATER) {
+                    energy += 0.25 * timeFactor;
+                    // Very low chance to remove water so plants don't desiccate the world
+                    if (Math.random() < 0.005 * timeFactor) {
+                        this.world.setParticle(px, py, PARTICLE_TYPES.EMPTY);
                     }
-                    break;
+                    absorbed = true;
                 }
             }
         }
 
         if (type === 0) { // Seed
-            if (energy > 3) {
+            // Seeds require less energy to germinate and can sprout into sand/rock-adjacent spots
+            if (energy > 2.2) {
                 this.world.particleData[idx + 1] = 1;
                 energy = 0;
-                if (this.world.getParticle(x, y - 1) === PARTICLE_TYPES.EMPTY) {
-                    const env = classifyEnvironment(this.world, x, y - 1);
-                    this.world.setParticle(x, y - 1, PARTICLE_TYPES.PLANT, [0, 1, 0, env.colorCode]);
+                // Try to occupy a nearby valid surface (soil, sand, shallow rock)
+                const trySpots = [[0,-1],[0,1],[-1,0],[1,0]];
+                for (const s of trySpots) {
+                    const sx = x + s[0], sy = y + s[1];
+                    if (!this.world.inBounds(sx, sy)) continue;
+                    const env = classifyEnvironment(this.world, sx, sy);
+                    const belowP = this.world.getParticle(sx, sy + 1);
+                    if (this.world.getParticle(sx, sy) === PARTICLE_TYPES.EMPTY && (belowP === PARTICLE_TYPES.SOIL || belowP === PARTICLE_TYPES.SAND || belowP === PARTICLE_TYPES.GRANITE || belowP === PARTICLE_TYPES.BASALT)) {
+                        this.world.setParticle(sx, sy, PARTICLE_TYPES.PLANT, [0, 1, 0, env.colorCode]);
+                        this.world.setUpdated(sx, sy);
+                        break;
+                    }
                 }
             }
         } else if (type === 1) { // Stem
@@ -80,13 +99,18 @@ export class PlantUpdater {
             if (energy > 5) {
                 if (height >= 4) {
                     // produce seeds in nearby soil rather than grow taller
-                    for (let dx = -3; dx <= 3; dx++) {
+                    // Spread seeds more conservatively and allow establishment on sand/rock edges
+                    for (let dx = -4; dx <= 4; dx++) {
                         const nx = x + dx;
                         if (nx < 0 || nx >= this.world.width) continue;
-                        for (let sy = 1; sy <= 4; sy++) {
+                        for (let sy = 1; sy <= 6; sy++) {
                             const ny = y + sy;
                             if (ny >= this.world.height) break;
-                            if (this.world.getParticle(nx, ny) === PARTICLE_TYPES.SOIL && Math.random() < 0.25) {
+                            const below = this.world.getParticle(nx, ny + 1);
+                            const target = this.world.getParticle(nx, ny);
+                            if ((target === PARTICLE_TYPES.EMPTY || target === PARTICLE_TYPES.SOIL) &&
+                                (below === PARTICLE_TYPES.SOIL || below === PARTICLE_TYPES.SAND || below === PARTICLE_TYPES.GRANITE || below === PARTICLE_TYPES.BASALT) &&
+                                Math.random() < 0.12) {
                                 const env = classifyEnvironment(this.world, nx, ny);
                                 this.world.setParticle(nx, ny, PARTICLE_TYPES.PLANT, [0, 0, 0, env.colorCode]); // seed
                                 this.world.setUpdated(nx, ny);
@@ -105,21 +129,28 @@ export class PlantUpdater {
                 }
             }
 
-            // Spread seeds
-            if (age > 200 && Math.random() < 0.001 * timeFactor) {
-                for (let dx = -10; dx <= 10; dx++) {
-                    const nx = x + dx;
-                    const ny = y + Math.floor(Math.random() * 5);
-                    const env = classifyEnvironment(this.world, nx, ny);
-                    if (this.world.getParticle(nx, ny) !== PARTICLE_TYPES.BEDROCK && this.world.inBounds(nx, ny)) {
+            // Occasional lateral colonization: less frequent but broader substrate acceptance
+            if (age > 150 && Math.random() < 0.0008 * timeFactor) {
+                for (let attempt = 0; attempt < 6; attempt++) {
+                    const nx = x + (Math.random() * 24 - 12) | 0;
+                    const ny = y + (Math.random() * 8 - 4) | 0;
+                    if (!this.world.inBounds(nx, ny)) continue;
+                    const below = this.world.getParticle(nx, ny + 1);
+                    const target = this.world.getParticle(nx, ny);
+                    if ((target === PARTICLE_TYPES.EMPTY || target === PARTICLE_TYPES.SOIL) &&
+                        (below === PARTICLE_TYPES.SOIL || below === PARTICLE_TYPES.SAND || below === PARTICLE_TYPES.GRANITE || below === PARTICLE_TYPES.BASALT)) {
+                        const env = classifyEnvironment(this.world, nx, ny);
                         this.world.setParticle(nx, ny, PARTICLE_TYPES.PLANT, [0, 0, 0, env.colorCode]);
+                        this.world.setUpdated(nx, ny);
+                        break;
                     }
                 }
             }
         }
 
-        // Death
-        if (age > 500 || (this.world.getParticle(x, y - 1) !== PARTICLE_TYPES.EMPTY && this.world.getParticle(x,y-1) !== PARTICLE_TYPES.PLANT)) {
+        // Death: make plants more forgiving — require old age AND being buried/overcrowded
+        const buriedAbove = this.world.getParticle(x, y - 1) !== PARTICLE_TYPES.EMPTY && this.world.getParticle(x, y - 1) !== PARTICLE_TYPES.PLANT;
+        if (age > 800 || (age > 300 && buriedAbove)) {
             this.world.setParticle(x, y, PARTICLE_TYPES.SOIL);
             return;
         }
