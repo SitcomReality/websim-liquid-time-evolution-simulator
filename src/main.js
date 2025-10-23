@@ -112,6 +112,10 @@ class App {
         const canvasElement = document.getElementById('worldCanvas');
         this.canvas = new Canvas(canvasElement, this.world);
         
+        // Initialize primordial manager
+        this.primordials = new PrimordialManager(this.world);
+        this.setupPrimordialControls();
+        
         if (!this.controls) {
             this.controls = new Controls(this.world, this.simulation, this.canvas);
         } else {
@@ -130,11 +134,58 @@ class App {
         document.getElementById('reset').onclick = () => {
             this.world.initialize(config);
             this.simulation.simulationTime = 0;
+            this.primordials = new PrimordialManager(this.world);
+            this.updatePrimordialList();
         };
         
         if (!this.looping) {
             this.looping = true;
             this.loop();
+        }
+    }
+    
+    setupPrimordialControls() {
+        const addBtn = document.getElementById('addPrimordial');
+        const removeBtn = document.getElementById('removePrimordial');
+        const domainSelect = document.getElementById('primordialDomain');
+        const colorInput = document.getElementById('primordialColor');
+        const sizeSlider = document.getElementById('primordialSize');
+        const listSelect = document.getElementById('primordialList');
+
+        addBtn.addEventListener('click', () => {
+            const domain = domainSelect.value;
+            const colorHex = colorInput.value;
+            const r = parseInt(colorHex.slice(1, 3), 16);
+            const g = parseInt(colorHex.slice(3, 5), 16);
+            const b = parseInt(colorHex.slice(5, 7), 16);
+            const size = parseInt(sizeSlider.value);
+
+            const id = this.primordials.add(domain, [r, g, b], size);
+            this.updatePrimordialList();
+        });
+
+        removeBtn.addEventListener('click', () => {
+            const selected = listSelect.value;
+            if (selected) {
+                this.primordials.remove(parseInt(selected));
+                this.updatePrimordialList();
+            }
+        });
+
+        this.updatePrimordialList();
+    }
+
+    updatePrimordialList() {
+        const listSelect = document.getElementById('primordialList');
+        listSelect.innerHTML = '';
+        
+        for (const entity of this.primordials.entities) {
+            if (entity.alive) {
+                const option = document.createElement('option');
+                option.value = entity.id;
+                option.textContent = `${entity.domain} (#${entity.id})`;
+                listSelect.appendChild(option);
+            }
         }
     }
     
@@ -149,6 +200,11 @@ class App {
 
         // Update simulation (may skip rendering)
         const shouldRender = this.simulation.update(deltaTime);
+        
+        // Update primordials
+        if (this.primordials) {
+            this.primordials.update();
+        }
         
         // Only render if simulation says we should
         if (shouldRender) {
