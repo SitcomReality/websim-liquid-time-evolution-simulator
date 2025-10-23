@@ -10,9 +10,11 @@ export class CloudUpdater {
 
         // Drift slowly
         const dir = Math.random() < 0.5 ? -1 : 1;
-        if (this.world.getParticle(x + dir, y) === 0 && Math.random() < 0.3) {
-            this.world.swapParticles(x, y, x + dir, y);
-            this.world.setUpdated(x + dir, y);
+        const pl = this.world.getPressure(x - 1, y), pr = this.world.getPressure(x + 1, y);
+        const windDir = (pl > pr) ? 1 : (pl < pr) ? -1 : dir;
+        if (this.world.getParticle(x + windDir, y) === 0 && Math.random() < 0.5) {
+            this.world.swapParticles(x, y, x + windDir, y);
+            this.world.setUpdated(x + windDir, y);
             return;
         }
 
@@ -41,12 +43,17 @@ export class CloudUpdater {
         // Precipitation: if mass high and temp cool enough, release rain/snow
         const precipThreshold = 5;
         if (mass >= precipThreshold) {
-            const below = this.world.getParticle(x, y + 1);
             const freezing = temp <= 0;
-            if (below === 0) {
-                this.world.setParticle(x, y + 1, freezing ? 6 : 2); // ICE (snow/hail) or WATER (rain)
+            for (let drops = 0; drops < 3; drops++) {
+                const dx = windDir * (Math.random() < 0.6 ? 1 : 0);
+                if (this.world.getParticle(x + dx, y + 1) === 0) {
+                    this.world.setParticle(x + dx, y + 1, freezing ? 6 : 2);
+                    // Cool the column where rain forms
+                    const tBelow = this.world.getTemperature(x + dx, y + 1);
+                    this.world.setTemperature(x + dx, y + 1, tBelow - (freezing ? 8 : 5));
+                }
             }
-            mass = Math.max(1, mass - 1.5); // shed mass
+            mass = Math.max(1, mass - 2.0);
         }
 
         // Evaporation/dissipation in warm air

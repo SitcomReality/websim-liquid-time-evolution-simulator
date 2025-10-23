@@ -44,6 +44,12 @@ export class LiquidUpdater {
         if (diagBelow === PARTICLE_TYPES.EMPTY) {
             this.world.swapParticles(x, y, x + dir, y + 1);
             this.world.setUpdated(x + dir, y + 1);
+            return;
+        }
+        const diagBelow2 = this.world.getParticle(x - dir, y + 1);
+        if (diagBelow2 === PARTICLE_TYPES.EMPTY) {
+            this.world.swapParticles(x, y, x - dir, y + 1);
+            this.world.setUpdated(x - dir, y + 1);
         }
     }
 }

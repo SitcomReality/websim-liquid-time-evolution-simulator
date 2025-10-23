@@ -85,11 +85,17 @@ export class ThermalUpdater {
             case PARTICLE_TYPES.WATER:
                 if (temp < TEMPERATURE.ICE_POINT) {
                     this.world.setParticle(x, y, PARTICLE_TYPES.ICE);
-                    // Release latent heat of fusion. Set temp to freezing point
-                    // as the water/ice mixture stays at 0°C until fully frozen.
                     this.world.setTemperature(x, y, TEMPERATURE.ICE_POINT);
                 } else if (temp > TEMPERATURE.WATER_BOILING) {
-                    this.world.setParticle(x, y, PARTICLE_TYPES.STEAM);
+                    // Evaporate only if exposed to air; scale rate with excess heat
+                    if (this.world.getParticle(x, y - 1) === PARTICLE_TYPES.EMPTY && Math.random() < Math.min(0.5, (temp - TEMPERATURE.WATER_BOILING) / 400)) {
+                        this.world.setParticle(x, y, PARTICLE_TYPES.STEAM);
+                    }
+                } else if (temp > 60) {
+                    // Gentle surface evaporation below boiling
+                    if (this.world.getParticle(x, y - 1) === PARTICLE_TYPES.EMPTY && Math.random() < 0.002) {
+                        this.world.setParticle(x, y, PARTICLE_TYPES.STEAM);
+                    }
                 }
                 break;
             

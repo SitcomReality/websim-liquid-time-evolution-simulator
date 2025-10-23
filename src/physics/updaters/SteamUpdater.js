@@ -18,9 +18,14 @@ export class SteamUpdater {
         const dir = Math.random() > 0.5 ? 1 : -1;
         let side = this.world.getParticle(x + dir, y);
         if (side === PARTICLE_TYPES.EMPTY) {
-            this.world.swapParticles(x, y, x + dir, y);
-            this.world.setUpdated(x + dir, y);
-            return;
+            // Pressure-driven drift (wind from high -> low)
+            const pl = this.world.getPressure(x - 1, y), pr = this.world.getPressure(x + 1, y);
+            const windDir = (pl > pr) ? 1 : (pl < pr) ? -1 : dir;
+            if (this.world.getParticle(x + windDir, y) === PARTICLE_TYPES.EMPTY && Math.random() < 0.6) {
+                this.world.swapParticles(x, y, x + windDir, y);
+                this.world.setUpdated(x + windDir, y);
+                return;
+            }
         }
         side = this.world.getParticle(x - dir, y);
         if (side === PARTICLE_TYPES.EMPTY) {
@@ -37,9 +42,8 @@ export class SteamUpdater {
         }
         const altitude = y / this.world.height;
         const coolEnough = temp < 35 || altitude < 0.25;
-        const crowded = steamNeighbors >= 8;
-        if ((coolEnough && crowded) || (coolEnough && Math.random() < 0.002)) {
-            // Condense into cloud with small initial mass stored in data[0]
+        const crowded = steamNeighbors >= 10;
+        if ((coolEnough && crowded) && Math.random() < 0.05) {
             this.world.setParticle(x, y, PARTICLE_TYPES.CLOUD, [1, 0, 0, 0]);
             return;
         }
