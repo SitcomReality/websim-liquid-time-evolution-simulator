@@ -24,6 +24,13 @@ export class AirflowUpdater {
 
     calculateWindFromGradients(fidelity) {
         const sampleCount = Math.ceil((this.world.windSize / 10) * fidelity);
+        // Global left/right temperature gradients at top and bottom
+        const tLT = this.world.getTemperature(2, 2);
+        const tRT = this.world.getTemperature(this.world.width - 3, 2);
+        const tLB = this.world.getTemperature(2, this.world.height - 3);
+        const tRB = this.world.getTemperature(this.world.width - 3, this.world.height - 3);
+        const gTop = (tRT - tLT) * 0.003;   // positive if right hotter
+        const gBot = (tRB - tLB) * 0.003;
 
         for (let i = 0; i < sampleCount; i++) {
             const idx = Math.floor(Math.random() * this.world.windSize);
@@ -62,6 +69,9 @@ export class AirflowUpdater {
             const maxWind = 2.0;
             vx = Math.max(-maxWind, Math.min(maxWind, vx));
             vy = Math.max(-maxWind, Math.min(maxWind, vy));
+            // Add global circulation: top flows hot->cold aloft; bottom returns cold->hot
+            const globalPush = (wy < this.world.windHeight * 0.5) ? -gTop : gBot;
+            vx += globalPush;
 
             this.world.windVx[idx] = vx * 0.8 + this.world.windVx[idx] * 0.2;
             this.world.windVy[idx] = vy * 0.8 + this.world.windVy[idx] * 0.2;
