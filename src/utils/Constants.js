@@ -37,7 +37,7 @@ export const PARTICLE_PROPERTIES = {
     [PARTICLE_TYPES.EMPTY]: { density: 0.0, viscosity: 0.0, flowRate: 1.0, isLiving: false },
     [PARTICLE_TYPES.STEAM]: { density: 0.1, viscosity: 0.01, flowRate: 0.9, isLiving: false },
     [PARTICLE_TYPES.CLOUD]: { density: 0.15, viscosity: 0.05, flowRate: 0.8, isLiving: false },
-    [PARTICLE_TYPES.WATER]: { density: 1.0, viscosity: 0.5, flowRate: 0.7, isLiving: false },
+    [PARTICLE_TYPES.WATER]: { density: 1.0, viscosity: 0.02, flowRate: 0.9, isLiving: false },
     [PARTICLE_TYPES.ICE]: { density: 0.92, viscosity: 0.7, flowRate: 0.05, isLiving: false },
     [PARTICLE_TYPES.SOIL]: { density: 1.3, viscosity: 2.0, flowRate: 0.1, isLiving: false },
     [PARTICLE_TYPES.SAND]: { density: 1.5, viscosity: 1.5, flowRate: 0.2, isLiving: false },
