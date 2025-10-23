@@ -125,7 +125,9 @@ export class ParticleUpdater {
                 this.steamUpdater.update(x, y);
                 break;
             case PARTICLE_TYPES.SOIL:
-                this.soilUpdater.update(x, y);
+                // Soil should behave like other falling solids (settle/gravity)
+                this.fallingUpdater.update(x, y);
+                // Keep occasional slow processes handled elsewhere; don't block falling
                 break;
             case PARTICLE_TYPES.ICE:
                 this.iceUpdater.update(x, y);
