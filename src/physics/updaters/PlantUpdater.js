@@ -1,4 +1,5 @@
 import { PARTICLE_TYPES } from '../../utils/Constants.js';
+import { classifyEnvironment, maybeBloom } from '../../biology/PlantEcology.js';
 
 export class PlantUpdater {
     constructor(world) {
@@ -32,6 +33,11 @@ export class PlantUpdater {
         const timeFactor = deltaTime / 16;
         age += timeFactor;
         this.world.particleData[idx + 2] = age;
+        // Assign/refresh color occasionally based on environment (flowers can appear)
+        if (Math.random() < 0.02 * timeFactor) {
+            const env = classifyEnvironment(this.world, x, y);
+            this.world.particleData[idx + 3] = maybeBloom(this.world.particleData[idx + 3] || env.colorCode, env.fertile);
+        }
 
         // Photosynthesis
         if (this.world.getParticle(x, y - 1) === PARTICLE_TYPES.EMPTY) {
@@ -56,7 +62,8 @@ export class PlantUpdater {
                 this.world.particleData[idx + 1] = 1;
                 energy = 0;
                 if (this.world.getParticle(x, y - 1) === PARTICLE_TYPES.EMPTY) {
-                    this.world.setParticle(x, y - 1, PARTICLE_TYPES.PLANT, [0, 1, 0, 0]);
+                    const env = classifyEnvironment(this.world, x, y - 1);
+                    this.world.setParticle(x, y - 1, PARTICLE_TYPES.PLANT, [0, 1, 0, env.colorCode]);
                 }
             }
         } else if (type === 1) { // Stem
@@ -80,7 +87,8 @@ export class PlantUpdater {
                             const ny = y + sy;
                             if (ny >= this.world.height) break;
                             if (this.world.getParticle(nx, ny) === PARTICLE_TYPES.SOIL && Math.random() < 0.25) {
-                                this.world.setParticle(nx, ny, PARTICLE_TYPES.PLANT, [0, 0, 0, 0]); // seed
+                                const env = classifyEnvironment(this.world, nx, ny);
+                                this.world.setParticle(nx, ny, PARTICLE_TYPES.PLANT, [0, 0, 0, env.colorCode]); // seed
                                 this.world.setUpdated(nx, ny);
                                 break;
                             }
@@ -102,8 +110,9 @@ export class PlantUpdater {
                 for (let dx = -10; dx <= 10; dx++) {
                     const nx = x + dx;
                     const ny = y + Math.floor(Math.random() * 5);
-                    if (this.world.getParticle(nx, ny) === PARTICLE_TYPES.SOIL) {
-                        this.world.setParticle(nx, ny, PARTICLE_TYPES.PLANT, [0, 0, 0, 0]);
+                    const env = classifyEnvironment(this.world, nx, ny);
+                    if (this.world.getParticle(nx, ny) !== PARTICLE_TYPES.BEDROCK && this.world.inBounds(nx, ny)) {
+                        this.world.setParticle(nx, ny, PARTICLE_TYPES.PLANT, [0, 0, 0, env.colorCode]);
                     }
                 }
             }
@@ -113,6 +122,27 @@ export class PlantUpdater {
         if (age > 500 || (this.world.getParticle(x, y - 1) !== PARTICLE_TYPES.EMPTY && this.world.getParticle(x,y-1) !== PARTICLE_TYPES.PLANT)) {
             this.world.setParticle(x, y, PARTICLE_TYPES.SOIL);
             return;
+        }
+        // Variant-specific micro-growth: allow colonization on many substrates
+        if (Math.random() < 0.002 * timeFactor) {
+            const env = classifyEnvironment(this.world, x, y);
+            // cactus: small, 3-5 px height
+            if (env.variant === 3) {
+                const h = 3 + Math.floor(Math.random() * 3);
+                for (let dy = 1; dy <= h; dy++) {
+                    if (this.world.getParticle(x, y - dy) === PARTICLE_TYPES.EMPTY)
+                        this.world.setParticle(x, y - dy, PARTICLE_TYPES.PLANT, [0, 1, 0, env.colorCode]);
+                }
+            } else if (env.variant === 1 || env.variant === 4) {
+                // moss/lichen: spread sideways on rock
+                const dir = Math.random() < 0.5 ? -1 : 1;
+                if (this.world.getParticle(x + dir, y) !== PARTICLE_TYPES.BEDROCK)
+                    this.world.setParticle(x + dir, y, PARTICLE_TYPES.PLANT, [0, 1, 0, env.colorCode]);
+            } else if (env.variant === 2 || env.variant === 5) {
+                // seaweed/coral: grow upward underwater
+                if (this.world.getParticle(x, y - 1) === PARTICLE_TYPES.WATER || this.world.getParticle(x, y) === PARTICLE_TYPES.WATER)
+                    this.world.setParticle(x, y - 1, PARTICLE_TYPES.PLANT, [0, 1, 0, env.colorCode]);
+            }
         }
 
         this.world.particleData[idx] = energy;

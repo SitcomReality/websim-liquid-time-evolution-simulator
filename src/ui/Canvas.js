@@ -1,4 +1,5 @@
 import { PARTICLE_COLORS, PARTICLE_TYPES } from '../utils/Constants.js';
+import { getPlantColor } from '../biology/PlantEcology.js';
 
 export class Canvas {
     constructor(canvas, world) {
@@ -107,7 +108,9 @@ export class Canvas {
                 data[idx + 3] = 255;
             } else {
                 // Normal particle rendering
-                const color = PARTICLE_COLORS[particleType];
+                const color = (particleType === PARTICLE_TYPES.PLANT)
+                    ? getPlantColor(this.world.particleData[i * 4 + 3] || 0)
+                    : PARTICLE_COLORS[particleType];
                 data[idx] = color[0];
                 data[idx + 1] = color[1];
                 data[idx + 2] = color[2];

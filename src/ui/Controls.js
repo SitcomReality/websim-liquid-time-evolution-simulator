@@ -1,4 +1,5 @@
 import { PARTICLE_TYPES } from '../utils/Constants.js';
+import { classifyEnvironment } from '../biology/PlantEcology.js';
 
 export class Controls {
     constructor(world, simulation, canvas) {
@@ -120,9 +121,9 @@ export class Controls {
                     const py = y + dy;
 
                     if (this.brushType === PARTICLE_TYPES.PLANT) {
-                        if (this.world.getParticle(px, py) === PARTICLE_TYPES.SOIL) {
-                             // data: [0:energy, 1:type(0=seed), 2:age]
-                            this.world.setParticle(px, py, this.brushType, [0, 0, 0]);
+                        if (this.world.getParticle(px, py) !== PARTICLE_TYPES.BEDROCK) {
+                            const env = classifyEnvironment(this.world, px, py);
+                            this.world.setParticle(px, py, this.brushType, [0, 0, 0, env.colorCode]);
                         }
                     } else if (this.brushType !== PARTICLE_TYPES.EMPTY) {
                         this.world.setParticle(px, py, this.brushType);
