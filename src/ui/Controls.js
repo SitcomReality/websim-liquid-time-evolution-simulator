@@ -62,7 +62,6 @@ export class Controls {
                 'ice': PARTICLE_TYPES.ICE,
                 'steam': PARTICLE_TYPES.STEAM,
                 'plant': PARTICLE_TYPES.PLANT,
-                'animal': PARTICLE_TYPES.ANIMAL,
                 'erase': PARTICLE_TYPES.EMPTY
             };
             this.brushType = typeMap[e.target.value];

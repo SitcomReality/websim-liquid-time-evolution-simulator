@@ -16,16 +16,22 @@ export class UnifiedFluidUpdater {
         if (!props) return;
 
         // 1. Gravity/Density-based vertical movement
-        this.applyGravity(x, y, particle, props);
+        if (!this.applyGravity(x, y, particle, props)) {
+            // Only apply horizontal flow if vertical movement didn't happen
+            if (Math.random() < props.flowRate * fidelity) {
+                // 2. Pressure-gradient driven flow (becomes more active at higher time scales)
+                this.applyFlowFromPressure(x, y, particle, props, timeScale);
+        
+                // 3. Viscous spreading at geological timescales
+                if (Math.random() < props.flowRate * 0.1 * timeScale * fidelity) {
+                    this.applyViscousFlow(x, y, particle, props, timeScale);
+                }
 
-        // 2. Pressure-gradient driven flow (becomes more active at higher time scales)
-        if (Math.random() < props.flowRate * fidelity) {
-            this.applyFlowFromPressure(x, y, particle, props, timeScale);
-        }
-
-        // 3. Viscous spreading at geological timescales
-        if (Math.random() < props.flowRate * 0.1 * timeScale * fidelity) {
-            this.applyViscousFlow(x, y, particle, props, timeScale);
+                // 4. Low-viscosity fluid flattening
+                if (props.viscosity < 0.1) {
+                    this.flattenFluid(x, y, particle, props);
+                }
+            }
         }
     }
 
@@ -36,41 +42,54 @@ export class UnifiedFluidUpdater {
             // Free fall
             this.world.swapParticles(x, y, x, y + 1);
             this.world.setUpdated(x, y + 1);
-            return;
+            return true;
         }
 
         const belowProps = PARTICLE_PROPERTIES[below];
 
         // Sinking: denser particles displace lighter ones
         if (belowProps && props.density > belowProps.density) {
-            if (Math.random() < Math.min(0.8, (props.density - belowProps.density) * 0.3)) {
+            // Structural integrity check for dense particles
+            if (props.viscosity > 1.0) { // Check for solids
+                const left = this.world.getParticle(x - 1, y);
+                const right = this.world.getParticle(x + 1, y);
+                const leftProps = PARTICLE_PROPERTIES[left];
+                const rightProps = PARTICLE_PROPERTIES[right];
+                
+                let support = 0;
+                if (leftProps && leftProps.viscosity >= props.viscosity) support++;
+                if (rightProps && rightProps.viscosity >= props.viscosity) support++;
+                
+                if (support > 0 && Math.random() < 0.99) {
+                     // High chance to stay put if supported
+                    if (support === 2 && Math.random() < 0.999) return false;
+                    return false;
+                }
+            }
+
+            // The chance to push through is penalized by the current particle's viscosity
+            const moveChance = 1.0 / (1.0 + props.viscosity * 10);
+            if (Math.random() < moveChance) {
                 this.world.swapParticles(x, y, x, y + 1);
                 this.world.setUpdated(x, y + 1);
-                return;
+                return true;
             }
         }
 
-        // Floating: lighter particles rise through heavier ones
-        if (belowProps && props.density < belowProps.density) {
-            const above = this.world.getParticle(x, y - 1);
-            const aboveProps = PARTICLE_PROPERTIES[above];
-            if ((above === PARTICLE_TYPES.EMPTY || aboveProps?.density > props.density) && Math.random() < 0.15) {
-                this.world.swapParticles(x, y, x, y - 1);
-                this.world.setUpdated(x, y - 1);
-                return;
+        // Settle diagonally if blocked, more likely for less viscous particles
+        const viscosityFactor = 1.0 - Math.min(0.95, props.viscosity / 20.0);
+        if (Math.random() < viscosityFactor) {
+            const dir = Math.random() > 0.5 ? 1 : -1;
+            for (const d of [dir, -dir]) {
+                const diagBelow = this.world.getParticle(x + d, y + 1);
+                if (diagBelow === PARTICLE_TYPES.EMPTY || (PARTICLE_PROPERTIES[diagBelow]?.density ?? Infinity) < props.density) {
+                    this.world.swapParticles(x, y, x + d, y + 1);
+                    this.world.setUpdated(x + d, y + 1);
+                    return true;
+                }
             }
         }
-
-        // Settle diagonally if blocked
-        const dir = Math.random() > 0.5 ? 1 : -1;
-        for (const d of [dir, -dir]) {
-            const diagBelow = this.world.getParticle(x + d, y + 1);
-            if (diagBelow === PARTICLE_TYPES.EMPTY || (PARTICLE_PROPERTIES[diagBelow]?.density ?? 0) < props.density) {
-                this.world.swapParticles(x, y, x + d, y + 1);
-                this.world.setUpdated(x + d, y + 1);
-                return;
-            }
-        }
+        return false;
     }
 
     applyFlowFromPressure(x, y, particle, props, timeScale) {
@@ -109,6 +128,26 @@ export class UnifiedFluidUpdater {
             if (side === PARTICLE_TYPES.EMPTY || (sideProps && props.density > sideProps.density)) {
                 this.world.swapParticles(x, y, x + dir, y);
                 this.world.setUpdated(x + dir, y);
+            }
+        }
+    }
+
+    flattenFluid(x, y, particle, props) {
+        // Specifically for low-viscosity fluids to spread out
+        const dir = Math.random() > 0.5 ? 1 : -1;
+        
+        for (const d of [dir, -dir]) {
+            const nx = x + d;
+            // Check if there is empty space to the side and no support underneath it
+            const side = this.world.getParticle(nx, y);
+            const sideBelow = this.world.getParticle(nx, y + 1);
+            
+            if (side === PARTICLE_TYPES.EMPTY && sideBelow === PARTICLE_TYPES.EMPTY) {
+                if (Math.random() < 0.8) { // High chance to spread
+                    this.world.swapParticles(x, y, nx, y);
+                    this.world.setUpdated(nx, y);
+                    return; // Return after one move
+                }
             }
         }
     }
