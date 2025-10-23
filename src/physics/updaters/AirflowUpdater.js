@@ -27,18 +27,18 @@ export class AirflowUpdater {
         // Global left/right temperature gradients at top and bottom
         const tLT = this.world.getTemperature(2, 2);
         const tRT = this.world.getTemperature(this.world.width - 3, 2);
-        const tLB = this.world.getTemperature(2, this.world.height - 3);
-        const tRB = this.world.getTemperature(this.world.width - 3, this.world.height - 3);
-        const gTop = (tRT - tLT) * 0.003;   // positive if right hotter
-        const gBot = (tRB - tLB) * 0.003;
+        const tLB = this.world.getTemperature(2, Math.floor(this.world.height * 0.6));
+        const tRB = this.world.getTemperature(this.world.width - 3, Math.floor(this.world.height * 0.6));
+        const gTop = (tRT - tLT) * 0.005;   // positive if right hotter
+        const gBot = (tRB - tLB) * 0.005;
 
         for (let i = 0; i < sampleCount; i++) {
             const idx = Math.floor(Math.random() * this.world.windSize);
             
             // Skip if not open air
             if (!this.world.airflow.isOpenAir(idx)) {
-                this.world.windVx[idx] *= 0.95; // Dampen wind underground
-                this.world.windVy[idx] *= 0.95;
+                this.world.windVx[idx] *= 0.8; // Dampen wind underground faster
+                this.world.windVy[idx] *= 0.8;
                 continue;
             }
             
@@ -55,15 +55,15 @@ export class AirflowUpdater {
             const pUp = this.world.getPressure(cx, cy - this.world.windResolution);
             const pDown = this.world.getPressure(cx, cy + this.world.windResolution);
 
-            // Pressure gradient
-            let vx = (pRight - pLeft) * 0.5;
-            let vy = (pDown - pUp) * 0.5;
+            // Pressure gradient (subtly influence, don't dominate)
+            let vx = (pRight - pLeft) * 0.1;
+            let vy = (pDown - pUp) * 0.1;
 
-            // Temperature buoyancy (hot air rises)
+            // Temperature buoyancy (hot air rises) - increased effect
             const tCenter = this.world.getTemperature(cx, cy);
             const tUp = this.world.getTemperature(cx, cy - this.world.windResolution);
             const tempDiff = tCenter - tUp;
-            vy -= tempDiff * 0.001;
+            vy -= tempDiff * 0.004;
 
             // Clamp to reasonable values
             const maxWind = 2.0;
@@ -73,8 +73,8 @@ export class AirflowUpdater {
             const globalPush = (wy < this.world.windHeight * 0.5) ? -gTop : gBot;
             vx += globalPush;
 
-            this.world.windVx[idx] = vx * 0.8 + this.world.windVx[idx] * 0.2;
-            this.world.windVy[idx] = vy * 0.8 + this.world.windVy[idx] * 0.2;
+            this.world.windVx[idx] = vx * 0.5 + this.world.windVx[idx] * 0.5;
+            this.world.windVy[idx] = vy * 0.5 + this.world.windVy[idx] * 0.5;
         }
     }
 

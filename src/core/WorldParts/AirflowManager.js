@@ -24,8 +24,28 @@ export class AirflowManager {
         this.windVx.fill(0);
         this.windVy.fill(0);
         this.windBuffer.fill(0);
-        this.isAirCell.fill(1); // Start assuming all is air
+        this.initialAirCellCheck(); // Run a full check at the start
         this.airCheckCounter = 0;
+    }
+
+    initialAirCellCheck() {
+        // A full, non-sampled check for the initial state.
+        for (let idx = 0; idx < this.windSize; idx++) {
+            const wx = idx % this.windWidth;
+            const wy = Math.floor(idx / this.windWidth);
+
+            const cx = Math.floor(wx * this.windResolution + this.windResolution / 2);
+            const cy = Math.floor(wy * this.windResolution + this.windResolution / 2);
+
+            if (!this.world.inBounds(cx, cy)) {
+                this.isAirCell[idx] = 0;
+                continue;
+            }
+
+            const particle = this.world.getParticle(cx, cy);
+            // Count as "air" if particle is empty, steam, or cloud.
+            this.isAirCell[idx] = (particle === 0 || particle === 7 || particle === 13) ? 1 : 0;
+        }
     }
 
     getWindIndex(x, y) {
