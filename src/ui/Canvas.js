@@ -10,6 +10,7 @@ export class Canvas {
         this.imageData = null;
         this.showTemperature = false;
         this.showPressure = false;
+        this.showWind = false;
         
         this.resize();
     }
@@ -29,12 +30,17 @@ export class Canvas {
     
     toggleTemperatureOverlay() {
         this.showTemperature = !this.showTemperature;
-        if (this.showTemperature) this.showPressure = false;
+        if (this.showTemperature) { this.showPressure = false; this.showWind = false; }
     }
     
     togglePressureOverlay() {
         this.showPressure = !this.showPressure;
-        if (this.showPressure) this.showTemperature = false;
+        if (this.showPressure) { this.showTemperature = false; this.showWind = false; }
+    }
+
+    toggleWindOverlay() {
+        this.showWind = !this.showWind;
+        if (this.showWind) { this.showTemperature = false; this.showPressure = false; }
     }
     
     render() {
@@ -99,6 +105,43 @@ export class Canvas {
                     const t = Math.min(1, (pressure - 1.0) / 2.0);
                     r = Math.floor(t * 255);
                     g = Math.floor(255 - t * 255);
+                    b = 0;
+                }
+                
+                data[idx] = r;
+                data[idx + 1] = g;
+                data[idx + 2] = b;
+                data[idx + 3] = 255;
+            } else if (this.showWind) {
+                // Wind magnitude and direction visualization
+                const x = i % this.world.width;
+                const y = Math.floor(i / this.world.width);
+                const wind = this.world.getWind(x, y);
+                const magnitude = wind.magnitude;
+                
+                // Color by magnitude: calm (blue) -> moderate (green) -> strong (red/yellow)
+                let r, g, b;
+                if (magnitude < 0.5) {
+                    // Calm: dark blue
+                    r = 20;
+                    g = 60;
+                    b = 150;
+                } else if (magnitude < 1.0) {
+                    // Moderate: green
+                    const t = (magnitude - 0.5) / 0.5;
+                    r = Math.floor(60 + t * 100);
+                    g = 180;
+                    b = Math.floor(60 - t * 40);
+                } else if (magnitude < 1.5) {
+                    // Strong: yellow
+                    const t = (magnitude - 1.0) / 0.5;
+                    r = 255;
+                    g = 200;
+                    b = 0;
+                } else {
+                    // Extreme: red
+                    r = 255;
+                    g = Math.max(0, 100 - (magnitude - 1.5) * 50);
                     b = 0;
                 }
                 

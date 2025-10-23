@@ -1,4 +1,5 @@
 import { Thermodynamics } from './WorldParts/Thermodynamics.js';
+import { AirflowManager } from './WorldParts/AirflowManager.js';
 import { ChunkManager } from './WorldParts/ChunkManager.js';
 import { ParticleAccess } from './WorldParts/ParticleAccess.js';
 import { generateScenarioTerrain } from './terrain/Scenario.js';
@@ -19,6 +20,7 @@ export class World {
         this.particleAccess = new ParticleAccess(this);
         this.chunkManager = new ChunkManager(this);
         this.thermo = new Thermodynamics(this);
+        this.airflow = new AirflowManager(this);
 
         // Expose commonly used helpers for backwards compatibility
         this.thermalResolution = this.thermo.thermalResolution;
@@ -28,6 +30,12 @@ export class World {
         this.temperature = this.thermo.temperature;
         this.pressure = this.thermo.pressure;
         this.tempBuffer = this.thermo.tempBuffer;
+
+        // Expose commonly used airflow helpers for convenience
+        this.windResolution = this.airflow.windResolution;
+        this.windWidth = this.airflow.windWidth;
+        this.windHeight = this.airflow.windHeight;
+        this.windSize = this.airflow.windSize;
 
         // Chunk config
         this.chunkSize = this.chunkManager.chunkSize;
@@ -42,6 +50,7 @@ export class World {
         this.particles.fill(PARTICLE_TYPES.EMPTY);
         this.particleData.fill(0);
         this.thermo.reset();
+        this.airflow.reset();
         this.chunkManager.reset();
         // Use existing terrain generator (scenario)
         generateScenarioTerrain(this, config);
@@ -73,4 +82,8 @@ export class World {
     clearUpdated() { this.updated.fill(0); }
     isUpdated(x, y) { return this.updated[this.getIndex(x, y)] === 1; }
     setUpdated(x, y) { this.updated[this.getIndex(x, y)] = 1; }
+
+    // Airflow helpers
+    getWind(x, y) { return this.airflow.getWind(x, y); }
+    setWind(x, y, vx, vy) { return this.airflow.setWind(x, y, vx, vy); }
 }

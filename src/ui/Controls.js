@@ -84,6 +84,7 @@ export class Controls {
             this.canvas.toggleTemperatureOverlay();
             document.getElementById('tempOverlay').classList.toggle('active');
             document.getElementById('pressOverlay').classList.remove('active');
+            document.getElementById('windOverlay').classList.remove('active');
         });
         
         // Pressure overlay
@@ -91,6 +92,15 @@ export class Controls {
             this.canvas.togglePressureOverlay();
             document.getElementById('pressOverlay').classList.toggle('active');
             document.getElementById('tempOverlay').classList.remove('active');
+            document.getElementById('windOverlay').classList.remove('active');
+        });
+
+        // Wind overlay
+        document.getElementById('windOverlay').addEventListener('click', () => {
+            this.canvas.toggleWindOverlay();
+            document.getElementById('windOverlay').classList.toggle('active');
+            document.getElementById('tempOverlay').classList.remove('active');
+            document.getElementById('pressOverlay').classList.remove('active');
         });
     }
     

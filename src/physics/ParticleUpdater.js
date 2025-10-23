@@ -9,6 +9,7 @@ import { SlowProcessesUpdater } from './updaters/SlowProcessesUpdater.js';
 import { ThermalUpdater } from './updaters/ThermalUpdater.js';
 import { GeologicalUpdater } from './updaters/GeologicalUpdater.js';
 import { IceUpdater } from './updaters/IceUpdater.js';
+import { AirflowUpdater } from './updaters/AirflowUpdater.js';
 
 export class ParticleUpdater {
     constructor(world) {
@@ -30,14 +31,16 @@ export class ParticleUpdater {
         this.erosionUpdater = new ErosionUpdater(world);
         this.slowUpdater = new SlowProcessesUpdater(world);
         this.thermalUpdater = new ThermalUpdater(world);
+        this.airflowUpdater = new AirflowUpdater(world);
         this.geologicalUpdater = new GeologicalUpdater(world);
     }
     
     update(fidelity, deltaTime) {
         this.world.clearUpdated();
         
-        // Update thermodynamics first
+        // Update thermodynamics and airflow
         this.thermalUpdater.update(fidelity, deltaTime);
+        this.airflowUpdater.update(fidelity, deltaTime);
         
         const activeChunks = Array.from(this.world.activeChunks);
         this.world.activeChunks.clear();

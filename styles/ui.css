@@ -49,6 +49,10 @@ button {
 
 button:hover { transform: translateY(0); opacity: 0.95; }
 button.primary { background: linear-gradient(180deg,#0f62fe,#0053c7); }
+button.active {
+    opacity: 0.7;
+    box-shadow: 0 0 12px rgba(15, 98, 254, 0.6);
+}
 
 /* Stats alignment */
 .stats {
