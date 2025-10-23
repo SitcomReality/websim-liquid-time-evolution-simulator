@@ -29,16 +29,16 @@ export class AirflowUpdater {
         const tRT = this.world.getTemperature(this.world.width - 3, 2);
         const tLB = this.world.getTemperature(2, Math.floor(this.world.height * 0.6));
         const tRB = this.world.getTemperature(this.world.width - 3, Math.floor(this.world.height * 0.6));
-        const gTop = (tRT - tLT) * 0.005;   // positive if right hotter
-        const gBot = (tRB - tLB) * 0.005;
+        const gTop = (tRT - tLT) * 0.05;   // Increased by 10x: stronger global circulation
+        const gBot = (tRB - tLB) * 0.05;
 
         for (let i = 0; i < sampleCount; i++) {
             const idx = Math.floor(Math.random() * this.world.windSize);
             
             // Skip if not open air
             if (!this.world.airflow.isOpenAir(idx)) {
-                this.world.windVx[idx] *= 0.8; // Dampen wind underground faster
-                this.world.windVy[idx] *= 0.8;
+                this.world.windVx[idx] *= 0.3; // Rapidly kill underground wind
+                this.world.windVy[idx] *= 0.3;
                 continue;
             }
             
@@ -55,26 +55,38 @@ export class AirflowUpdater {
             const pUp = this.world.getPressure(cx, cy - this.world.windResolution);
             const pDown = this.world.getPressure(cx, cy + this.world.windResolution);
 
-            // Pressure gradient (subtly influence, don't dominate)
-            let vx = (pRight - pLeft) * 0.1;
-            let vy = (pDown - pUp) * 0.1;
+            // Pressure gradient - increased influence
+            let vx = (pLeft - pRight) * 2.0; // Stronger pressure gradient effect
+            let vy = (pUp - pDown) * 2.0;
 
-            // Temperature buoyancy (hot air rises) - increased effect
+            // Temperature buoyancy (hot air rises) - massively increased
             const tCenter = this.world.getTemperature(cx, cy);
             const tUp = this.world.getTemperature(cx, cy - this.world.windResolution);
-            const tempDiff = tCenter - tUp;
-            vy -= tempDiff * 0.004;
+            const tDown = this.world.getTemperature(cx, cy + this.world.windResolution);
+            const tLeft = this.world.getTemperature(cx - this.world.windResolution, cy);
+            const tRight = this.world.getTemperature(cx + this.world.windResolution, cy);
+            
+            // Vertical buoyancy from temperature (hot rises, cold sinks)
+            const verticalTempDiff = tCenter - tUp;
+            vy -= verticalTempDiff * 0.08; // 20x stronger than before
+            
+            // Horizontal flow from temperature gradients
+            const horizontalTempDiff = tRight - tLeft;
+            vx += horizontalTempDiff * 0.02;
 
-            // Clamp to reasonable values
-            const maxWind = 2.0;
-            vx = Math.max(-maxWind, Math.min(maxWind, vx));
-            vy = Math.max(-maxWind, Math.min(maxWind, vy));
             // Add global circulation: top flows hot->cold aloft; bottom returns cold->hot
-            const globalPush = (wy < this.world.windHeight * 0.5) ? -gTop : gBot;
+            const altitudeRatio = wy / this.world.windHeight;
+            const globalPush = (altitudeRatio < 0.4) ? gBot : (altitudeRatio > 0.6) ? -gTop : 0;
             vx += globalPush;
 
-            this.world.windVx[idx] = vx * 0.5 + this.world.windVx[idx] * 0.5;
-            this.world.windVy[idx] = vy * 0.5 + this.world.windVy[idx] * 0.5;
+            // Clamp to reasonable values
+            const maxWind = 5.0; // Increased max wind speed
+            vx = Math.max(-maxWind, Math.min(maxWind, vx));
+            vy = Math.max(-maxWind, Math.min(maxWind, vy));
+
+            // Blend with previous wind but keep more of the new calculation
+            this.world.windVx[idx] = vx * 0.7 + this.world.windVx[idx] * 0.3; // Keep 70% new, 30% old
+            this.world.windVy[idx] = vy * 0.7 + this.world.windVy[idx] * 0.3;
         }
     }
 
@@ -96,7 +108,7 @@ export class AirflowUpdater {
             const sampleY = Math.max(0, Math.min(this.world.thermalHeight - 1, ty - Math.sign(wind.vy) * sampleDist));
             const sampleIdx = sampleY * this.world.thermalWidth + sampleX;
 
-            const advectionAmount = Math.min(0.3, Math.abs(wind.magnitude) * 0.1);
+            const advectionAmount = Math.min(0.5, Math.abs(wind.magnitude) * 0.15); // Stronger advection
             this.world.tempBuffer[idx] = this.world.temperature[idx] * (1 - advectionAmount) +
                                         this.world.temperature[sampleIdx] * advectionAmount;
         }
@@ -125,7 +137,7 @@ export class AirflowUpdater {
             const sampleY = Math.max(0, Math.min(this.world.thermalHeight - 1, ty - Math.sign(wind.vy) * sampleDist));
             const sampleIdx = sampleY * this.world.thermalWidth + sampleX;
 
-            const advectionAmount = Math.min(0.2, Math.abs(wind.magnitude) * 0.05);
+            const advectionAmount = Math.min(0.3, Math.abs(wind.magnitude) * 0.1); // Slightly stronger
             this.world.pressure[idx] = this.world.pressure[idx] * (1 - advectionAmount) +
                                        this.world.pressure[sampleIdx] * advectionAmount;
         }
@@ -133,7 +145,7 @@ export class AirflowUpdater {
 
     diffuseWind(fidelity) {
         const sampleCount = Math.ceil((this.world.windSize / 15) * fidelity);
-        const diffuseAmount = 0.15;
+        const diffuseAmount = 0.08; // Less diffusion to keep wind patterns sharper
 
         for (let i = 0; i < sampleCount; i++) {
             const idx = Math.floor(Math.random() * this.world.windSize);
@@ -155,9 +167,12 @@ export class AirflowUpdater {
                     const nwy = wy + dy;
                     if (nwx >= 0 && nwx < this.world.windWidth && nwy >= 0 && nwy < this.world.windHeight) {
                         const nIdx = nwy * this.world.windWidth + nwx;
-                        avgVx += this.world.windVx[nIdx];
-                        avgVy += this.world.windVy[nIdx];
-                        count++;
+                        // Only average with other air cells
+                        if (this.world.airflow.isOpenAir(nIdx)) {
+                            avgVx += this.world.windVx[nIdx];
+                            avgVy += this.world.windVy[nIdx];
+                            count++;
+                        }
                     }
                 }
             }

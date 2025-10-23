@@ -15,7 +15,7 @@ export class AirflowManager {
         // Track which cells are "open air" vs underground/filled
         this.isAirCell = new Uint8Array(this.windSize);
         this.airCheckCounter = 0;
-        this.airCheckInterval = 30; // Check every N frames
+        this.airCheckInterval = 20; // Check more frequently
         
         this.reset();
     }
@@ -24,6 +24,7 @@ export class AirflowManager {
         this.windVx.fill(0);
         this.windVy.fill(0);
         this.windBuffer.fill(0);
+        this.isAirCell.fill(0); // Start with no air cells
         this.initialAirCellCheck(); // Run a full check at the start
         this.airCheckCounter = 0;
     }
@@ -42,9 +43,29 @@ export class AirflowManager {
                 continue;
             }
 
-            const particle = this.world.getParticle(cx, cy);
-            // Count as "air" if particle is empty, steam, or cloud.
-            this.isAirCell[idx] = (particle === 0 || particle === 7 || particle === 13) ? 1 : 0;
+            // Sample a 3x3 grid within this wind cell
+            let airCount = 0;
+            let totalCount = 0;
+            const sampleSize = Math.max(2, Math.floor(this.windResolution / 2));
+            
+            for (let dy = -sampleSize; dy <= sampleSize; dy += sampleSize) {
+                for (let dx = -sampleSize; dx <= sampleSize; dx += sampleSize) {
+                    const px = cx + dx;
+                    const py = cy + dy;
+                    
+                    if (this.world.inBounds(px, py)) {
+                        totalCount++;
+                        const particle = this.world.getParticle(px, py);
+                        // Count as "air" if particle is empty, steam, or cloud.
+                        if (particle === 0 || particle === 7 || particle === 13) {
+                            airCount++;
+                        }
+                    }
+                }
+            }
+            
+            // Cell is "air" if at least 50% is open
+            this.isAirCell[idx] = (airCount / Math.max(1, totalCount)) >= 0.5 ? 1 : 0;
         }
     }
 
@@ -71,7 +92,7 @@ export class AirflowManager {
 
     updateAirCells() {
         // Periodically check which cells are open air vs underground
-        const sampleCount = Math.ceil(this.windSize / 15);
+        const sampleCount = Math.ceil(this.windSize / 10); // Check more cells per update
         
         for (let i = 0; i < sampleCount; i++) {
             const idx = Math.floor(Math.random() * this.windSize);
@@ -102,8 +123,8 @@ export class AirflowManager {
                 }
             }
             
-            // Cell is "air" if at least 60% of sampled area is empty/air-like
-            const airThreshold = 0.6;
+            // Cell is "air" if at least 50% of sampled area is empty/air-like
+            const airThreshold = 0.5; // Reduced from 0.6 to be more inclusive
             this.isAirCell[idx] = (emptyCount / Math.max(1, totalCount)) > airThreshold ? 1 : 0;
         }
     }
