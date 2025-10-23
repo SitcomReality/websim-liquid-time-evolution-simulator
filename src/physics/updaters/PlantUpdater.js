@@ -11,6 +11,23 @@ export class PlantUpdater {
         let type = this.world.particleData[idx + 1];
         let age = this.world.particleData[idx + 2];
 
+        // If plant has only void beneath it, make it fall as dirt or seed
+        const below = this.world.getParticle(x, y + 1);
+        if (below === PARTICLE_TYPES.EMPTY) {
+            // Fall down: either become a seed or soil when falling
+            if (Math.random() < 0.5) {
+                // place a seed below
+                this.world.setParticle(x, y + 1, PARTICLE_TYPES.PLANT, [0, 0, 0, 0]);
+            } else {
+                // become soil (dirt) and drop down
+                this.world.setParticle(x, y + 1, PARTICLE_TYPES.SOIL);
+            }
+            // remove current plant pixel
+            this.world.setParticle(x, y, PARTICLE_TYPES.EMPTY);
+            this.world.setUpdated(x, y + 1);
+            return;
+        }
+
         // Scale growth by actual simulation time
         const timeFactor = deltaTime / 16;
         age += timeFactor;
@@ -43,10 +60,41 @@ export class PlantUpdater {
                 }
             }
         } else if (type === 1) { // Stem
-            // Grow upwards
-            if (energy > 5 && this.world.getParticle(x, y - 1) === PARTICLE_TYPES.EMPTY) {
-                this.world.setParticle(x, y - 1, PARTICLE_TYPES.PLANT, [0, 1, 0, 0]);
-                energy = 0;
+            // Enforce a maximum column height of 4 pixels. If at max, produce seeds instead.
+            // Count continuous plant pixels downward to find column height to "ground"
+            let height = 0;
+            for (let dy = 0; dy < 50; dy++) {
+                const ny = y + dy;
+                if (ny >= this.world.height) break;
+                if (this.world.getParticle(x, ny) === PARTICLE_TYPES.PLANT) height++;
+                else break;
+            }
+
+            if (energy > 5) {
+                if (height >= 4) {
+                    // produce seeds in nearby soil rather than grow taller
+                    for (let dx = -3; dx <= 3; dx++) {
+                        const nx = x + dx;
+                        if (nx < 0 || nx >= this.world.width) continue;
+                        for (let sy = 1; sy <= 4; sy++) {
+                            const ny = y + sy;
+                            if (ny >= this.world.height) break;
+                            if (this.world.getParticle(nx, ny) === PARTICLE_TYPES.SOIL && Math.random() < 0.25) {
+                                this.world.setParticle(nx, ny, PARTICLE_TYPES.PLANT, [0, 0, 0, 0]); // seed
+                                this.world.setUpdated(nx, ny);
+                                break;
+                            }
+                        }
+                    }
+                    energy = 0;
+                } else {
+                    // Grow upwards as normal
+                    if (this.world.getParticle(x, y - 1) === PARTICLE_TYPES.EMPTY) {
+                        this.world.setParticle(x, y - 1, PARTICLE_TYPES.PLANT, [0, 1, 0, 0]);
+                        energy = 0;
+                        this.world.setUpdated(x, y - 1);
+                    }
+                }
             }
 
             // Spread seeds
