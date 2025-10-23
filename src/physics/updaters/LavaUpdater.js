@@ -1,14 +1,14 @@
 import { PARTICLE_TYPES } from '../../utils/Constants.js';
 
 export class LavaUpdater {
-    constructor(world, liquidUpdater) {
+    constructor(world, fluidUpdater) {
         this.world = world;
-        this.liquidUpdater = liquidUpdater;
+        this.fluidUpdater = fluidUpdater;
     }
 
     update(x, y) {
-        // behave like liquid
-        this.liquidUpdater.update(x, y);
+        // Use fluid physics for movement
+        this.fluidUpdater.update(x, y, 1, 1);
         
         // Heat surroundings
         const currentTemp = this.world.getTemperature(x, y);
@@ -27,10 +27,8 @@ export class LavaUpdater {
                 if (neighbor === PARTICLE_TYPES.ICE) {
                     this.world.setParticle(nx, ny, PARTICLE_TYPES.WATER);
                     this.world.setTemperature(nx, ny, 50);
-                    // Cool the lava slightly
                     this.world.setTemperature(x, y, currentTemp - 10);
                 } else if (neighbor === PARTICLE_TYPES.WATER) {
-                    // Boil water
                     if (Math.random() < 0.1) {
                         this.world.setParticle(nx, ny, PARTICLE_TYPES.STEAM);
                     }

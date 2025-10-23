@@ -6,50 +6,49 @@ export class IceUpdater {
     }
 
     update(x, y) {
+        const props = PARTICLE_PROPERTIES[PARTICLE_TYPES.ICE];
         const below = this.world.getParticle(x, y + 1);
         
-        // Fall through air
-        if (below === PARTICLE_TYPES.EMPTY) {
+        // Fall through air and low-density particles
+        if (below === PARTICLE_TYPES.EMPTY || below === PARTICLE_TYPES.STEAM || below === PARTICLE_TYPES.CLOUD) {
             this.world.swapParticles(x, y, x, y + 1);
             this.world.setUpdated(x, y + 1);
             return;
         }
         
-        // Float on water and drift with it
+        const belowProps = PARTICLE_PROPERTIES[below];
+        
+        // Sink through lighter particles
+        if (belowProps && props.density > belowProps.density && Math.random() < 0.3) {
+            this.world.swapParticles(x, y, x, y + 1);
+            this.world.setUpdated(x, y + 1);
+            return;
+        }
+        
+        // Float on water
         if (below === PARTICLE_TYPES.WATER) {
             const above = this.world.getParticle(x, y - 1);
-            if (above === PARTICLE_TYPES.EMPTY || above === PARTICLE_TYPES.WATER) {
+            const aboveProps = PARTICLE_PROPERTIES[above];
+            if ((above === PARTICLE_TYPES.EMPTY || (aboveProps && props.density < aboveProps.density)) && Math.random() < 0.2) {
                 this.world.swapParticles(x, y, x, y - 1);
                 this.world.setUpdated(x, y - 1);
                 return;
             }
             
-            // Drift horizontally on water surface
-            if (Math.random() < 0.4) {
-                const dir = Math.random() > 0.5 ? 1 : -1;
-                const side = this.world.getParticle(x + dir, y);
-                const sideBelow = this.world.getParticle(x + dir, y + 1);
+            // Drift horizontally on water with pressure
+            if (Math.random() < 0.3) {
+                const pl = this.world.getPressure(x - 1, y);
+                const pr = this.world.getPressure(x + 1, y);
+                const windDir = (pl > pr) ? 1 : (pl < pr) ? -1 : (Math.random() > 0.5 ? 1 : -1);
+                const side = this.world.getParticle(x + windDir, y);
+                const sideBelow = this.world.getParticle(x + windDir, y + 1);
                 
-                if (side === PARTICLE_TYPES.EMPTY && sideBelow === PARTICLE_TYPES.WATER) {
-                    this.world.swapParticles(x, y, x + dir, y);
-                    this.world.setUpdated(x + dir, y);
-                    return;
+                if ((side === PARTICLE_TYPES.EMPTY || (PARTICLE_PROPERTIES[side]?.density ?? 0) < props.density) && 
+                    (sideBelow === PARTICLE_TYPES.WATER || sideBelow === PARTICLE_TYPES.EMPTY)) {
+                    this.world.swapParticles(x, y, x + windDir, y);
+                    this.world.setUpdated(x + windDir, y);
                 }
             }
         }
-        
-        // Apply pressure-driven drift even on solid surfaces
-        const pl = this.world.getPressure(x - 1, y);
-        const pr = this.world.getPressure(x + 1, y);
-        if (Math.abs(pl - pr) > 0.15 && Math.random() < 0.2) {
-            const windDir = pl > pr ? 1 : -1;
-            const side = this.world.getParticle(x + windDir, y);
-            if (side === PARTICLE_TYPES.EMPTY || side === PARTICLE_TYPES.WATER) {
-                this.world.swapParticles(x, y, x + windDir, y);
-                this.world.setUpdated(x + windDir, y);
-            }
-        }
-        
-        // Melting handled by ThermalUpdater.
     }
 }

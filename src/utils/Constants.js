@@ -32,20 +32,22 @@ export const PARTICLE_COLORS = {
     [PARTICLE_TYPES.CLOUD]: [235, 235, 245, 180]
 };
 
+// Fluid properties: density, viscosity, flowRate (how quickly it spreads), isLiving
 export const PARTICLE_PROPERTIES = {
-    [PARTICLE_TYPES.SAND]: { density: 1.5, fluid: false, fallSpeed: 1 },
-    [PARTICLE_TYPES.WATER]: { density: 1.0, fluid: true, fallSpeed: 2 },
-    [PARTICLE_TYPES.GRANITE]: { density: 2.7, fluid: false, fallSpeed: 0 },
-    [PARTICLE_TYPES.SOIL]: { density: 1.2, fluid: false, fallSpeed: 0.5 },
-    [PARTICLE_TYPES.LAVA]: { density: 2.0, fluid: true, fallSpeed: 1 },
-    [PARTICLE_TYPES.ICE]: { density: 0.9, fluid: false, fallSpeed: 0 },
-    [PARTICLE_TYPES.STEAM]: { density: 0.1, fluid: true, fallSpeed: -1 },
-    [PARTICLE_TYPES.PLANT]: { density: 0.8, fluid: false, fallSpeed: 0 },
-    [PARTICLE_TYPES.ANIMAL]: { density: 1.0, fluid: false, fallSpeed: 0 },
-    [PARTICLE_TYPES.BASALT]: { density: 3.0, fluid: false, fallSpeed: 0 },
-    [PARTICLE_TYPES.MANTLE]: { density: 3.3, fluid: true, fallSpeed: 0.001 },
-    [PARTICLE_TYPES.BEDROCK]: { density: 4.0, fluid: false, fallSpeed: 0 },
-    [PARTICLE_TYPES.CLOUD]: { density: 0.05, fluid: true, fallSpeed: 0 }
+    [PARTICLE_TYPES.EMPTY]: { density: 0.0, viscosity: 0.0, flowRate: 1.0, isLiving: false },
+    [PARTICLE_TYPES.STEAM]: { density: 0.1, viscosity: 0.01, flowRate: 0.9, isLiving: false },
+    [PARTICLE_TYPES.CLOUD]: { density: 0.15, viscosity: 0.05, flowRate: 0.8, isLiving: false },
+    [PARTICLE_TYPES.WATER]: { density: 1.0, viscosity: 0.5, flowRate: 0.7, isLiving: false },
+    [PARTICLE_TYPES.ICE]: { density: 0.92, viscosity: 0.7, flowRate: 0.05, isLiving: false },
+    [PARTICLE_TYPES.SOIL]: { density: 1.3, viscosity: 2.0, flowRate: 0.1, isLiving: false },
+    [PARTICLE_TYPES.SAND]: { density: 1.5, viscosity: 1.5, flowRate: 0.2, isLiving: false },
+    [PARTICLE_TYPES.LAVA]: { density: 2.0, viscosity: 8.0, flowRate: 0.3, isLiving: false },
+    [PARTICLE_TYPES.BASALT]: { density: 3.0, viscosity: 15.0, flowRate: 0.08, isLiving: false },
+    [PARTICLE_TYPES.GRANITE]: { density: 2.7, viscosity: 12.0, flowRate: 0.06, isLiving: false },
+    [PARTICLE_TYPES.MANTLE]: { density: 3.3, viscosity: 20.0, flowRate: 0.04, isLiving: false },
+    [PARTICLE_TYPES.BEDROCK]: { density: 4.0, viscosity: 30.0, flowRate: 0.02, isLiving: false },
+    [PARTICLE_TYPES.PLANT]: { density: 0.8, viscosity: 100.0, flowRate: 0.0, isLiving: true },
+    [PARTICLE_TYPES.ANIMAL]: { density: 1.0, viscosity: 100.0, flowRate: 0.0, isLiving: true }
 };
 
 // Temperature constants (in Celsius)
