@@ -5,9 +5,9 @@
 }
 
 body {
-    font-family: 'Space Mono', monospace;
-    background: #000;
-    color: #fff;
+    font-family: 'Noto Sans', 'Space Mono', monospace;
+    background: #0b0b0b;
+    color: #eaeaea;
     overflow: hidden;
     width: 100vw;
     height: 100vh;
@@ -17,7 +17,18 @@ body {
     width: 100%;
     height: 100%;
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
+}
+
+#controls {
+    width: 320px;
+    min-width: 260px;
+    max-width: 360px;
+    height: 100%;
+    box-shadow: 2px 0 12px rgba(0,0,0,0.6);
+    overflow-y: auto;
+    padding: 20px;
+    background: linear-gradient(180deg, #0f0f10 0%, #0b0b0b 100%);
 }
 
 #worldCanvas {
@@ -25,6 +36,10 @@ body {
     display: block;
     image-rendering: pixelated;
     image-rendering: crisp-edges;
-    background: #1a0b2e;
+    background: #111116;
     cursor: crosshair;
+    align-self: center;
+    margin: 24px;
+    border-radius: 6px;
+    box-shadow: 0 6px 30px rgba(0,0,0,0.7);
 }
