@@ -12,9 +12,14 @@ export class CloudUpdater {
         const dir = Math.random() < 0.5 ? -1 : 1;
         const pl = this.world.getPressure(x - 1, y), pr = this.world.getPressure(x + 1, y);
         const windDir = (pl > pr) ? 1 : (pl < pr) ? -1 : dir;
-        if (this.world.getParticle(x + windDir, y) === 0 && Math.random() < 0.5) {
+        if (this.world.getParticle(x + windDir, y) === 0 && Math.random() < 0.8) {
             this.world.swapParticles(x, y, x + windDir, y);
             this.world.setUpdated(x + windDir, y);
+            // strong gusts: take a second step when gradient large
+            if (Math.abs(pl - pr) > 0.25 && this.world.getParticle(x + windDir * 2, y) === 0 && Math.random() < 0.4) {
+                this.world.swapParticles(x + windDir, y, x + windDir * 2, y);
+                this.world.setUpdated(x + windDir * 2, y);
+            }
             return;
         }
 

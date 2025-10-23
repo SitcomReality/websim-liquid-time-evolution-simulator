@@ -7,6 +7,12 @@ export class LiquidUpdater {
 
     update(x, y) {
         const below = this.world.getParticle(x, y + 1);
+        // Wind-driven lateral drift (pressure pushes toward lower pressure)
+        const pl = this.world.getPressure(x - 1, y), pr = this.world.getPressure(x + 1, y);
+        const windDir = (pl > pr) ? 1 : (pl < pr) ? -1 : 0;
+        if (windDir && this.world.getParticle(x + windDir, y) === PARTICLE_TYPES.EMPTY && Math.random() < Math.min(0.5, Math.abs(pl - pr))) {
+            this.world.swapParticles(x, y, x + windDir, y); this.world.setUpdated(x + windDir, y); return;
+        }
         
         // Fall down
         if (below === PARTICLE_TYPES.EMPTY) {

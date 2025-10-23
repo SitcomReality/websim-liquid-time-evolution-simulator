@@ -21,9 +21,14 @@ export class SteamUpdater {
             // Pressure-driven drift (wind from high -> low)
             const pl = this.world.getPressure(x - 1, y), pr = this.world.getPressure(x + 1, y);
             const windDir = (pl > pr) ? 1 : (pl < pr) ? -1 : dir;
-            if (this.world.getParticle(x + windDir, y) === PARTICLE_TYPES.EMPTY && Math.random() < 0.6) {
+            if (this.world.getParticle(x + windDir, y) === PARTICLE_TYPES.EMPTY && Math.random() < 0.8) {
                 this.world.swapParticles(x, y, x + windDir, y);
                 this.world.setUpdated(x + windDir, y);
+                // occasional gust: push an extra step if empty and strong gradient
+                if (Math.abs(pl - pr) > 0.2 && this.world.getParticle(x + windDir * 2, y) === PARTICLE_TYPES.EMPTY && Math.random() < 0.3) {
+                    this.world.swapParticles(x + windDir, y, x + windDir * 2, y);
+                    this.world.setUpdated(x + windDir * 2, y);
+                }
                 return;
             }
         }
