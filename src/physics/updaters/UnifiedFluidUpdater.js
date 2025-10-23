@@ -39,6 +39,27 @@ export class UnifiedFluidUpdater {
         const below = this.world.getParticle(x, y + 1);
 
         if (below === PARTICLE_TYPES.EMPTY) {
+            // Structural integrity check for solid particles, allowing for caves.
+            if (props.viscosity > 10.0) {
+                // Calculate support from neighbors. More support = less chance to fall.
+                let support = 0;
+                // Strong support from horizontal neighbors
+                if (PARTICLE_PROPERTIES[this.world.getParticle(x - 1, y)]?.viscosity >= props.viscosity) support += 2;
+                if (PARTICLE_PROPERTIES[this.world.getParticle(x + 1, y)]?.viscosity >= props.viscosity) support += 2;
+                // Support from above (arch effect)
+                if (PARTICLE_PROPERTIES[this.world.getParticle(x, y - 1)]?.viscosity >= props.viscosity) support += 1;
+                // Support from diagonal-up
+                if (PARTICLE_PROPERTIES[this.world.getParticle(x - 1, y - 1)]?.viscosity >= props.viscosity) support += 1;
+                if (PARTICLE_PROPERTIES[this.world.getParticle(x + 1, y - 1)]?.viscosity >= props.viscosity) support += 1;
+                
+                // Base chance to fall is very low, reduced further by support.
+                // At max support (7), chance is ~0.0001
+                const fallChance = Math.max(0, (0.005 - support * 0.0007));
+                if (Math.random() > fallChance) {
+                    return false; // Stay put
+                }
+            }
+            
             // Free fall
             this.world.swapParticles(x, y, x, y + 1);
             this.world.setUpdated(x, y + 1);
