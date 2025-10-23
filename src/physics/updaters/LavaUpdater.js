@@ -10,11 +10,8 @@ export class LavaUpdater {
         // Use fluid physics for movement
         this.fluidUpdater.update(x, y, 1, 1);
         
-        // Reduce self-heating to avoid runaway; slight stochastic heat retention
-        const currentTemp = this.world.getTemperature(x, y);
-        if (currentTemp < 1200) {
-            if (Math.random() < 0.2) this.world.setTemperature(x, y, currentTemp + 5);
-        }
+        // Remove self-heating to prevent runaway melting
+        // const currentTemp = this.world.getTemperature(x, y);
         
         // Convert adjacent ice to water and heat transfer
         for (let dx = -1; dx <= 1; dx++) {
@@ -26,13 +23,14 @@ export class LavaUpdater {
                 
                 if (neighbor === PARTICLE_TYPES.ICE) {
                     this.world.setParticle(nx, ny, PARTICLE_TYPES.WATER);
-                    this.world.setTemperature(nx, ny, 50);
-                    this.world.setTemperature(x, y, currentTemp - 10);
+                    this.world.setTemperature(nx, ny, 40);
+                    // Cool lava more on phase change
+                    // this.world.setTemperature(x, y, currentTemp - 10);
                 } else if (neighbor === PARTICLE_TYPES.WATER) {
-                    if (Math.random() < 0.1) {
+                    if (Math.random() < 0.2) {
                         this.world.setParticle(nx, ny, PARTICLE_TYPES.STEAM);
                     }
-                    this.world.setTemperature(nx, ny, 120);
+                    this.world.setTemperature(nx, ny, 110);
                 }
             }
         }

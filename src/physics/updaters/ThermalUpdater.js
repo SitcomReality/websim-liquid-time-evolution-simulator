@@ -3,7 +3,7 @@ import { PARTICLE_TYPES, TEMPERATURE, THERMAL_PROPERTIES } from '../../utils/Con
 export class ThermalUpdater {
     constructor(world) {
         this.world = world;
-        this.diffusionRate = 0.3; // Heat diffusion coefficient
+        this.diffusionRate = 0.2; // Reduce diffusion to keep heat pockets localized
     }
 
     update(fidelity, deltaTime) {
@@ -108,38 +108,31 @@ export class ThermalUpdater {
                 break;
             
             case PARTICLE_TYPES.GRANITE:
-                // Pressure raises melting point: negative feedback against runaway melting
-                const effectiveGraniteMelting = TEMPERATURE.GRANITE_MELTING + Math.max(0, (pressure - 1.0)) * 120;
+                const effectiveGraniteMelting = TEMPERATURE.GRANITE_MELTING + Math.max(0, (pressure - 1.0)) * 180;
                 if (temp > effectiveGraniteMelting) {
                     this.world.setParticle(x, y, PARTICLE_TYPES.LAVA);
-                    // Latent heat absorption: melting consumes heat
-                    this.world.setTemperature(x, y, temp - 100);
+                    this.world.setTemperature(x, y, temp - 120);
                 }
                 break;
             
             case PARTICLE_TYPES.BASALT:
-                // Basalt can melt into lava (easier than granite)
-                if (temp > TEMPERATURE.BASALT_MELTING) {
+                if (temp > TEMPERATURE.BASALT_MELTING && pressure < 1.8) {
                     this.world.setParticle(x, y, PARTICLE_TYPES.LAVA);
-                    this.world.setTemperature(x, y, temp + 30);
-                }
-                // Basalt metamorphoses into granite under high pressure and moderate heat
-                else if (pressure > 2.5 && temp > TEMPERATURE.BASALT_METAMORPHISM && temp < 900 && Math.random() < 0.0005) {
+                    this.world.setTemperature(x, y, temp + 20);
+                } else if (pressure > 2.5 && temp > TEMPERATURE.BASALT_METAMORPHISM && temp < 900 && Math.random() < 0.0005) {
                     this.world.setParticle(x, y, PARTICLE_TYPES.GRANITE);
-                    // Metamorphism absorbs some heat
                     this.world.setTemperature(x, y, temp - 30);
                 }
                 break;
             
             case PARTICLE_TYPES.LAVA:
-                // Self-cooling: faster if exposed to non-lava; slow radiative cooling even when buried
                 let exposure = 0;
                 for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
                     if (dx === 0 && dy === 0) continue;
                     const n = this.world.getParticle(x + dx, y + dy);
                     if (n !== PARTICLE_TYPES.LAVA && n !== PARTICLE_TYPES.BEDROCK) exposure++;
                 }
-                const cool = (exposure >= 3 ? 6 : 2) + 0.5; // surface vs buried + radiative
+                const cool = (exposure >= 3 ? 8 : 3); // Faster surface cooling
                 this.world.setTemperature(x, y, temp - cool);
                 
                 // Lava heats surroundings (reduced to curb runaway)
@@ -149,9 +142,15 @@ export class ThermalUpdater {
                         const nx = x + dx, ny = y + dy;
                         if (this.world.inBounds(nx, ny)) {
                             const neighborTemp = this.world.getTemperature(nx, ny);
-                            this.world.setTemperature(nx, ny, neighborTemp + 2);
+                            this.world.setTemperature(nx, ny, neighborTemp + 1); // Lowered neighbor heating
                         }
                     }
+                }
+                
+                // Solidify to basalt when sufficiently cool or insulated
+                if (temp < TEMPERATURE.LAVA_SOLIDIFY) {
+                    this.world.setParticle(x, y, PARTICLE_TYPES.BASALT);
+                    this.world.setTemperature(x, y, Math.max(TEMPERATURE.AMBIENT, temp - 80));
                 }
                 break;
             
