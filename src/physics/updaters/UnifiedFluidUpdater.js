@@ -42,6 +42,7 @@ export class UnifiedFluidUpdater {
             // Structural integrity check for solid particles, allowing for caves.
             if (props.viscosity > 10.0) {
                 // Calculate support from neighbors. More support = less chance to fall.
+                // Support is weighted: 2 for horizontal, 1 for above/diagonal-up. Max support = 7.
                 let support = 0;
                 // Strong support from horizontal neighbors
                 if (PARTICLE_PROPERTIES[this.world.getParticle(x - 1, y)]?.viscosity >= props.viscosity) support += 2;
@@ -52,11 +53,18 @@ export class UnifiedFluidUpdater {
                 if (PARTICLE_PROPERTIES[this.world.getParticle(x - 1, y - 1)]?.viscosity >= props.viscosity) support += 1;
                 if (PARTICLE_PROPERTIES[this.world.getParticle(x + 1, y - 1)]?.viscosity >= props.viscosity) support += 1;
                 
-                // Base chance to fall is very low, reduced further by support.
-                // At max support (7), chance is ~0.0001
-                const fallChance = Math.max(0, (0.005 - support * 0.0007));
+                // Exponential resistance calculation based on support.
+                // If support is 0, fall chance is high (~0.999). If support is 7, fall chance is tiny (~0.0001).
+                // R determines the exponential decay of fall chance; higher viscosity increases R.
+                const R_viscosity = Math.log2(Math.max(10.01, props.viscosity) / 10.0);
+                const R = 3.0 + R_viscosity; 
+                
+                const P_base = 0.999;
+                // fallChance decreases exponentially as support increases.
+                const fallChance = P_base * Math.pow(R, -support);
+
                 if (Math.random() > fallChance) {
-                    return false; // Stay put
+                    return false; // Stay put due to structural integrity
                 }
             }
             
