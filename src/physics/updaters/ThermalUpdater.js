@@ -71,12 +71,13 @@ export class ThermalUpdater {
     }
 
     transitionParticle(x, y, particle, temp) {
+        const pressure = this.world.getPressure(x, y);
+        
         switch (particle) {
             case PARTICLE_TYPES.ICE:
                 if (temp > TEMPERATURE.ICE_POINT) {
                     this.world.setParticle(x, y, PARTICLE_TYPES.WATER);
                     // Absorb latent heat of fusion, cooling the spot significantly.
-                    // This makes melting a much slower process for large bodies of ice.
                     const newTemp = this.world.getTemperature(x, y) - 80;
                     this.world.setTemperature(x, y, newTemp);
                 }
@@ -107,10 +108,25 @@ export class ThermalUpdater {
                 break;
             
             case PARTICLE_TYPES.GRANITE:
-                if (temp > TEMPERATURE.GRANITE_MELTING) {
+                // Granite melts at high temperature OR under extreme pressure + moderate heat
+                if (temp > TEMPERATURE.GRANITE_MELTING || (pressure > 3.5 && temp > 800 && Math.random() < 0.001)) {
                     this.world.setParticle(x, y, PARTICLE_TYPES.LAVA);
                     // Add heat when melting
                     this.world.setTemperature(x, y, temp + 50);
+                }
+                break;
+            
+            case PARTICLE_TYPES.BASALT:
+                // Basalt can melt into lava (easier than granite)
+                if (temp > TEMPERATURE.BASALT_MELTING) {
+                    this.world.setParticle(x, y, PARTICLE_TYPES.LAVA);
+                    this.world.setTemperature(x, y, temp + 30);
+                }
+                // Basalt metamorphoses into granite under high pressure and moderate heat
+                else if (pressure > 2.5 && temp > TEMPERATURE.BASALT_METAMORPHISM && temp < 900 && Math.random() < 0.0005) {
+                    this.world.setParticle(x, y, PARTICLE_TYPES.GRANITE);
+                    // Metamorphism absorbs some heat
+                    this.world.setTemperature(x, y, temp - 30);
                 }
                 break;
             
@@ -132,6 +148,23 @@ export class ThermalUpdater {
                             this.world.setTemperature(nx, ny, neighborTemp + 5);
                         }
                     }
+                }
+                break;
+            
+            case PARTICLE_TYPES.SOIL:
+                // Soil lithifies into basalt under high pressure and moderate heat (sedimentary -> metamorphic)
+                if (pressure > 3.0 && temp > TEMPERATURE.SOIL_LITHIFICATION && temp < 900 && Math.random() < 0.0002) {
+                    this.world.setParticle(x, y, PARTICLE_TYPES.BASALT);
+                    // Lithification releases heat from compression
+                    this.world.setTemperature(x, y, temp + 20);
+                }
+                break;
+            
+            case PARTICLE_TYPES.SAND:
+                // Sand lithifies into granite under extreme pressure (sandstone formation)
+                if (pressure > 3.5 && temp > TEMPERATURE.SAND_LITHIFICATION && temp < 1000 && Math.random() < 0.0001) {
+                    this.world.setParticle(x, y, PARTICLE_TYPES.GRANITE);
+                    this.world.setTemperature(x, y, temp + 15);
                 }
                 break;
         }

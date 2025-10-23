@@ -51,6 +51,23 @@ export class GeologicalUpdater {
                     this.world.swapParticles(x, y, nx, y);
                 }
             }
+            
+            // Pressure-induced phase transitions for cycling
+            // Extreme pressure can cause spontaneous melting
+            if (pressure > 4.0 && temp > 700 && Math.random() < 0.0001) {
+                if (particle === PARTICLE_TYPES.GRANITE || particle === PARTICLE_TYPES.BASALT) {
+                    this.world.setParticle(x, y, PARTICLE_TYPES.LAVA);
+                    this.world.setTemperature(x, y, temp + 100);
+                }
+            }
+            
+            // Pressure relief causes decompression melting (like at mid-ocean ridges)
+            if (pressure < 1.5 && temp > 900 && Math.random() < 0.0005) {
+                if (particle === PARTICLE_TYPES.MANTLE || particle === PARTICLE_TYPES.BASALT) {
+                    this.world.setParticle(x, y, PARTICLE_TYPES.LAVA);
+                    this.world.setTemperature(x, y, temp + 50);
+                }
+            }
         }
     }
 
@@ -86,9 +103,10 @@ export class GeologicalUpdater {
             const y = Math.floor(this.world.height * 0.7 + Math.random() * this.world.height * 0.1);
             
             const temp = this.world.getTemperature(x, y);
+            const pressure = this.world.getPressure(x, y);
             
-            // If hot enough, melt mantle/granite to create a lava plume
-            if (this.world.getParticle(x, y) === PARTICLE_TYPES.MANTLE && temp > 1400) {
+            // If hot enough and under pressure, melt mantle/granite to create a lava plume
+            if (this.world.getParticle(x, y) === PARTICLE_TYPES.MANTLE && temp > 1400 && pressure > 2.0) {
                 // Erupt upwards, melting through the crust
                 for (let dy = 0; dy < this.world.height * 0.4; dy++) {
                     const ny = y - dy;
@@ -107,6 +125,20 @@ export class GeologicalUpdater {
                     } else if (particleAbove === PARTICLE_TYPES.BEDROCK) {
                         break; // Can't melt bedrock
                     }
+                }
+            }
+            
+            // Cooling and subduction: surface basalt in cold zones can sink and metamorphose
+            const surfaceY = Math.floor(this.world.height * 0.3);
+            const surfaceX = Math.floor(Math.random() * this.world.width);
+            const surfaceTemp = this.world.getTemperature(surfaceX, surfaceY);
+            const surfaceParticle = this.world.getParticle(surfaceX, surfaceY);
+            
+            if (surfaceParticle === PARTICLE_TYPES.BASALT && surfaceTemp < 100 && Math.random() < 0.01) {
+                // Cold basalt becomes denser and can sink (subduction simulation)
+                const below = this.world.getParticle(surfaceX, surfaceY + 1);
+                if (below === PARTICLE_TYPES.WATER || below === PARTICLE_TYPES.SOIL) {
+                    this.world.swapParticles(surfaceX, surfaceY, surfaceX, surfaceY + 1);
                 }
             }
         }

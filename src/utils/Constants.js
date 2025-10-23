@@ -55,9 +55,12 @@ export const TEMPERATURE = {
     ABSOLUTE_ZERO: -273,
     ICE_POINT: 0,
     WATER_BOILING: 100,
-    LAVA_SOLIDIFY: 800,
-    GRANITE_MELTING: 1200,
-    BASALT_MELTING: 1100,
+    LAVA_SOLIDIFY: 700,         // Lowered to match granite melting rate
+    GRANITE_MELTING: 1100,       // Slightly lowered
+    BASALT_MELTING: 1050,        // Basalt melts easier than granite
+    BASALT_METAMORPHISM: 600,    // Metamorphic transition temperature
+    SOIL_LITHIFICATION: 400,     // Soil compacts into stone under pressure
+    SAND_LITHIFICATION: 500,     // Sand becomes sandstone
     BEDROCK_MELTING: 4000,
     AMBIENT: 20
 };
