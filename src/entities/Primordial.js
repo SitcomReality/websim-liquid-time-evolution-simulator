@@ -86,12 +86,10 @@ export class Primordial {
             case 'life':
                 // Create soil/plants in suitable spots
                 if (P === 0 && world.getParticle(x, y + 1) === 4) {
-                    const { classifyEnvironment } = await import('../biology/PlantEcology.js');
                     const env = classifyEnvironment(world, x, y);
                     world.setParticle(x, y, 8, [0, 0, 0, env.colorCode]);
                 } else if (P === 4 && world.getParticle(x, y - 1) === 0) {
                     if (Math.random() < 0.3) {
-                        const { classifyEnvironment } = await import('../biology/PlantEcology.js');
                         const env = classifyEnvironment(world, x, y);
                         world.setParticle(x, y, 8, [0, 0, 0, env.colorCode]);
                     }
