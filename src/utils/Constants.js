@@ -55,9 +55,9 @@ export const TEMPERATURE = {
     ABSOLUTE_ZERO: -273,
     ICE_POINT: 0,
     WATER_BOILING: 100,
-    LAVA_SOLIDIFY: 850,         // Raised: lava needs sustained heat to avoid solidifying
-    GRANITE_MELTING: 1250,       // Raised: harder to melt; mitigates runaway melting
-    BASALT_MELTING: 1150,        // Raised and paired with low-pressure requirement
+    LAVA_SOLIDIFY: 500,         // Raised: lava needs sustained heat to avoid solidifying
+    GRANITE_MELTING: 1000,       // Raised: harder to melt; mitigates runaway melting
+    BASALT_MELTING: 950,        // Raised and paired with low-pressure requirement
     BASALT_METAMORPHISM: 600,
     SOIL_LITHIFICATION: 400,
     SAND_LITHIFICATION: 500,
