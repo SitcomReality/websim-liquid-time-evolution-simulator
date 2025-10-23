@@ -15,9 +15,11 @@ export class PlantUpdater {
         // If plant has only void beneath it, make it fall as dirt or seed
         const below = this.world.getParticle(x, y + 1);
         const currentParticle = this.world.getParticle(x, y);
-        const isInWater = currentParticle === PARTICLE_TYPES.PLANT && (below === PARTICLE_TYPES.WATER || this.world.getParticle(x, y) === PARTICLE_TYPES.WATER);
+        const above = this.world.getParticle(x, y - 1);
+        const isWaterSurface = (below === PARTICLE_TYPES.WATER && above === PARTICLE_TYPES.EMPTY);
+        const isSubmerged = (below === PARTICLE_TYPES.WATER || this.world.getParticle(x - 1, y) === PARTICLE_TYPES.WATER || this.world.getParticle(x + 1, y) === PARTICLE_TYPES.WATER);
         // If plant is in water: seeds should float up to surface; stems should sink to attach to substrate
-        if (isInWater) {
+        if (isSubmerged) {
             // read seed/stem type stored in data (0 = seed, 1 = stem)
             const seedType = this.world.particleData[idx + 1] || 0;
             if (seedType === 0) {
@@ -99,7 +101,6 @@ export class PlantUpdater {
 
         // Photosynthesis
         // Allow photosynthesis when at least part of canopy is exposed (not strictly empty above).
-        const above = this.world.getParticle(x, y - 1);
         const canopyExposed = (above === PARTICLE_TYPES.EMPTY || above === PARTICLE_TYPES.STEAM || above === PARTICLE_TYPES.CLOUD);
         if (canopyExposed) {
             energy += 0.45 * timeFactor; // robust but slightly reduced from previous aggressive gain
