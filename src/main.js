@@ -17,12 +17,9 @@ class App {
         this.lastFpsUpdate = performance.now();
         
         this.setupNewGameModal();
-        this.createWorld(400, 300, {
-            stonePercent: 60,
-            sandPercent: 20,
-            waterPercent: 15,
-            soilPercent: 5
-        });
+        this.setupSplash(); // show splash on load, delay world creation until user starts
+        // Do not create world here automatically
+        // this.createWorld(400, 300, { ... });
     }
     
     setupNewGameModal() {
@@ -61,6 +58,27 @@ class App {
             
             this.createWorld(width, height, config);
             modal.classList.add('hidden');
+        });
+    }
+    
+    setupSplash() {
+        const splash = document.getElementById('splash');
+        const startDefault = document.getElementById('startDefault');
+        const startNewWorld = document.getElementById('startNewWorld');
+
+        startDefault.addEventListener('click', () => {
+            splash.classList.add('hidden');
+            this.createWorld(400, 300, {
+                stonePercent: 60,
+                sandPercent: 20,
+                waterPercent: 15,
+                soilPercent: 5
+            });
+        });
+
+        startNewWorld.addEventListener('click', () => {
+            // Open the New World modal from splash
+            document.getElementById('newGameModal').classList.remove('hidden');
         });
     }
     
