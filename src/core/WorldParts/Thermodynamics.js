@@ -22,26 +22,33 @@ export class Thermodynamics {
     getThermalIndex(x, y) {
         const tx = Math.floor(x / this.thermalResolution);
         const ty = Math.floor(y / this.thermalResolution);
-        return ty * this.thermalWidth + tx;
+        // Clamp to valid thermal grid to avoid out-of-range indices from fractional/world-edge coords
+        const cx = Math.max(0, Math.min(this.thermalWidth - 1, tx));
+        const cy = Math.max(0, Math.min(this.thermalHeight - 1, ty));
+        return cy * this.thermalWidth + cx;
     }
 
     getTemperature(x, y) {
         if (!this.world.inBounds(x, y)) return TEMPERATURE.AMBIENT;
-        return this.temperature[this.getThermalIndex(x, y)];
+        const idx = this.getThermalIndex(x, y);
+        return this.temperature[idx] !== undefined ? this.temperature[idx] : TEMPERATURE.AMBIENT;
     }
 
     setTemperature(x, y, temp) {
         if (!this.world.inBounds(x, y)) return;
-        this.temperature[this.getThermalIndex(x, y)] = temp;
+        const idx = this.getThermalIndex(x, y);
+        if (idx >= 0 && idx < this.temperature.length) this.temperature[idx] = temp;
     }
 
     getPressure(x, y) {
         if (!this.world.inBounds(x, y)) return 1.0;
-        return this.pressure[this.getThermalIndex(x, y)];
+        const idx = this.getThermalIndex(x, y);
+        return this.pressure[idx] !== undefined ? this.pressure[idx] : 1.0;
     }
 
     setPressure(x, y, p) {
         if (!this.world.inBounds(x, y)) return;
-        this.pressure[this.getThermalIndex(x, y)] = p;
+        const idx = this.getThermalIndex(x, y);
+        if (idx >= 0 && idx < this.pressure.length) this.pressure[idx] = p;
     }
 }
