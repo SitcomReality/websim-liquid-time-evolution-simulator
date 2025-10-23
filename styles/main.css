@@ -6,7 +6,7 @@
 
 body {
     font-family: 'Space Mono', monospace;
-    background: #000;
+    background: linear-gradient(180deg, #1a0b2e 0%, #3b1b63 40%, #6b2e8a 70%, #120617 100%);
     color: #fff;
     overflow: hidden;
     width: 100vw;
@@ -28,4 +28,3 @@ body {
     background: #000;
     cursor: crosshair;
 }
-
