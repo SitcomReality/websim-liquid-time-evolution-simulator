@@ -15,11 +15,14 @@ export class UnifiedFluidUpdater {
         const props = PARTICLE_PROPERTIES[particle];
         if (!props) return;
 
+        // Apply wind force to light particles
+        this.applyWindForce(x, y, particle, props, timeScale);
+
         // 1. Gravity/Density-based vertical movement
         if (!this.applyGravity(x, y, particle, props)) {
             // Only apply horizontal flow if vertical movement didn't happen
             if (Math.random() < props.flowRate * fidelity) {
-                // 2. Pressure-gradient driven flow (becomes more active at higher time scales)
+                // 2. Pressure-gradient driven flow
                 this.applyFlowFromPressure(x, y, particle, props, timeScale);
         
                 // 3. Viscous spreading at geological timescales
@@ -31,6 +34,68 @@ export class UnifiedFluidUpdater {
                 if (props.viscosity < 0.1) {
                     this.flattenFluid(x, y, particle, props);
                 }
+            }
+        }
+    }
+
+    applyWindForce(x, y, particle, props, timeScale) {
+        const wind = this.world.getWind(x, y);
+        const windMagnitude = wind.magnitude;
+        
+        if (windMagnitude < 0.05) return; // No wind here
+        
+        // Wind susceptibility based on density
+        // Steam (0.1) and clouds (0.15) are very susceptible
+        // Water (1.0), ice (0.92) are moderately susceptible
+        // Soil (1.3), sand (1.5) less susceptible
+        // Heavy particles barely affected
+        
+        const densityThreshold = 2.5; // Particles heavier than this resist wind strongly
+        if (props.density > densityThreshold) return;
+        
+        // Calculate wind force (inverse relationship with density)
+        const densityFactor = Math.max(0.1, 1.0 - (props.density / densityThreshold));
+        const windForce = windMagnitude * densityFactor * 0.8;
+        
+        // For steam and clouds, wind has very high influence
+        if (particle === PARTICLE_TYPES.STEAM || particle === PARTICLE_TYPES.CLOUD) {
+            // These should move with wind very readily
+            const moveChance = Math.min(0.95, windForce * 2.0);
+            if (Math.random() < moveChance) {
+                const dir = wind.vx > 0 ? 1 : (wind.vx < 0 ? -1 : 0);
+                const target = this.world.getParticle(x + dir, y);
+                
+                if (target === PARTICLE_TYPES.EMPTY || target === PARTICLE_TYPES.STEAM || target === PARTICLE_TYPES.CLOUD) {
+                    this.world.swapParticles(x, y, x + dir, y);
+                    this.world.setUpdated(x + dir, y);
+                    return;
+                }
+            }
+        }
+        
+        // For lighter fluids (water, ice), wind has moderate influence
+        if ((particle === PARTICLE_TYPES.WATER || particle === PARTICLE_TYPES.ICE) && Math.random() < windForce * 0.6) {
+            const dir = wind.vx > 0 ? 1 : (wind.vx < 0 ? -1 : 0);
+            const target = this.world.getParticle(x + dir, y);
+            const targetProps = PARTICLE_PROPERTIES[target];
+            
+            if (target === PARTICLE_TYPES.EMPTY || (targetProps && props.density > targetProps.density)) {
+                this.world.swapParticles(x, y, x + dir, y);
+                this.world.setUpdated(x + dir, y);
+                return;
+            }
+        }
+        
+        // For soil and sand, wind only affects them in very strong gusts
+        if (Math.random() < windForce * 0.15) {
+            const dir = Math.abs(wind.vx) > Math.abs(wind.vy) ? 
+                (wind.vx > 0 ? 1 : -1) : 
+                (Math.random() > 0.5 ? 1 : -1);
+            const target = this.world.getParticle(x + dir, y);
+            
+            if (target === PARTICLE_TYPES.EMPTY) {
+                this.world.swapParticles(x, y, x + dir, y);
+                this.world.setUpdated(x + dir, y);
             }
         }
     }

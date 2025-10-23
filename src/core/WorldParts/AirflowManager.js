@@ -3,7 +3,7 @@ export class AirflowManager {
         this.world = world;
         
         // Wind field at thermal resolution
-        this.windResolution = Math.max(4, world.thermo.thermalResolution * 2); // Coarser than thermal
+        this.windResolution = Math.max(4, world.thermo.thermalResolution * 2);
         this.windWidth = Math.ceil(world.width / this.windResolution);
         this.windHeight = Math.ceil(world.height / this.windResolution);
         this.windSize = this.windWidth * this.windHeight;
@@ -12,6 +12,11 @@ export class AirflowManager {
         this.windVy = new Float32Array(this.windSize);
         this.windBuffer = new Float32Array(this.windSize);
         
+        // Track which cells are "open air" vs underground/filled
+        this.isAirCell = new Uint8Array(this.windSize);
+        this.airCheckCounter = 0;
+        this.airCheckInterval = 30; // Check every N frames
+        
         this.reset();
     }
 
@@ -19,6 +24,8 @@ export class AirflowManager {
         this.windVx.fill(0);
         this.windVy.fill(0);
         this.windBuffer.fill(0);
+        this.isAirCell.fill(1); // Start assuming all is air
+        this.airCheckCounter = 0;
     }
 
     getWindIndex(x, y) {
@@ -40,5 +47,48 @@ export class AirflowManager {
         const idx = this.getWindIndex(x, y);
         this.windVx[idx] = vx;
         this.windVy[idx] = vy;
+    }
+
+    updateAirCells() {
+        // Periodically check which cells are open air vs underground
+        const sampleCount = Math.ceil(this.windSize / 15);
+        
+        for (let i = 0; i < sampleCount; i++) {
+            const idx = Math.floor(Math.random() * this.windSize);
+            const wx = idx % this.windWidth;
+            const wy = Math.floor(idx / this.windWidth);
+            
+            // Check a 3x3 area in world space centered on this wind cell
+            const cx = wx * this.windResolution + this.windResolution * 0.5;
+            const cy = wy * this.windResolution + this.windResolution * 0.5;
+            
+            let emptyCount = 0;
+            let totalCount = 0;
+            const checkRadius = this.windResolution * 1.5;
+            
+            for (let dy = -checkRadius; dy <= checkRadius; dy += this.windResolution) {
+                for (let dx = -checkRadius; dx <= checkRadius; dx += this.windResolution) {
+                    const px = Math.floor(cx + dx);
+                    const py = Math.floor(cy + dy);
+                    
+                    if (this.world.inBounds(px, py)) {
+                        totalCount++;
+                        const particle = this.world.getParticle(px, py);
+                        // Count as "empty air" if particle is empty, steam, or cloud
+                        if (particle === 0 || particle === 7 || particle === 13) {
+                            emptyCount++;
+                        }
+                    }
+                }
+            }
+            
+            // Cell is "air" if at least 60% of sampled area is empty/air-like
+            const airThreshold = 0.6;
+            this.isAirCell[idx] = (emptyCount / Math.max(1, totalCount)) > airThreshold ? 1 : 0;
+        }
+    }
+
+    isOpenAir(idx) {
+        return this.isAirCell[idx] === 1;
     }
 }
