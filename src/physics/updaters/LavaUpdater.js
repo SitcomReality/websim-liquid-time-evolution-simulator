@@ -10,10 +10,10 @@ export class LavaUpdater {
         // Use fluid physics for movement
         this.fluidUpdater.update(x, y, 1, 1);
         
-        // Heat surroundings
+        // Reduce self-heating to avoid runaway; slight stochastic heat retention
         const currentTemp = this.world.getTemperature(x, y);
         if (currentTemp < 1200) {
-            this.world.setTemperature(x, y, currentTemp + 20);
+            if (Math.random() < 0.2) this.world.setTemperature(x, y, currentTemp + 5);
         }
         
         // Convert adjacent ice to water and heat transfer
@@ -35,6 +35,17 @@ export class LavaUpdater {
                     this.world.setTemperature(nx, ny, 120);
                 }
             }
+        }
+        
+        // Pressure-driven lateral flow to vent and spread (helps cooling/solidifying)
+        const pl = this.world.getPressure(x - 1, y);
+        const pr = this.world.getPressure(x + 1, y);
+        const dir = pl > pr ? 1 : (pl < pr ? -1 : (Math.random() > 0.5 ? 1 : -1));
+        const side = this.world.getParticle(x + dir, y);
+        if ((side === PARTICLE_TYPES.EMPTY || side === PARTICLE_TYPES.WATER) && Math.random() < 0.6) {
+            this.world.swapParticles(x, y, x + dir, y);
+            this.world.setUpdated(x + dir, y);
+            return;
         }
     }
 }

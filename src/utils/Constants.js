@@ -41,7 +41,7 @@ export const PARTICLE_PROPERTIES = {
     [PARTICLE_TYPES.ICE]: { density: 0.92, viscosity: 0.7, flowRate: 0.05, isLiving: false },
     [PARTICLE_TYPES.SOIL]: { density: 1.3, viscosity: 2.0, flowRate: 0.1, isLiving: false },
     [PARTICLE_TYPES.SAND]: { density: 1.5, viscosity: 1.5, flowRate: 0.2, isLiving: false },
-    [PARTICLE_TYPES.LAVA]: { density: 2.0, viscosity: 8.0, flowRate: 0.3, isLiving: false },
+    [PARTICLE_TYPES.LAVA]: { density: 2.0, viscosity: 12.0, flowRate: 0.2, isLiving: false },
     [PARTICLE_TYPES.BASALT]: { density: 3.0, viscosity: 15.0, flowRate: 0.08, isLiving: false },
     [PARTICLE_TYPES.GRANITE]: { density: 2.7, viscosity: 12.0, flowRate: 0.06, isLiving: false },
     [PARTICLE_TYPES.MANTLE]: { density: 3.3, viscosity: 20.0, flowRate: 0.04, isLiving: false },

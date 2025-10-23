@@ -108,11 +108,12 @@ export class ThermalUpdater {
                 break;
             
             case PARTICLE_TYPES.GRANITE:
-                // Granite melts at high temperature OR under extreme pressure + moderate heat
-                if (temp > TEMPERATURE.GRANITE_MELTING || (pressure > 3.5 && temp > 800 && Math.random() < 0.001)) {
+                // Pressure raises melting point: negative feedback against runaway melting
+                const effectiveGraniteMelting = TEMPERATURE.GRANITE_MELTING + Math.max(0, (pressure - 1.0)) * 120;
+                if (temp > effectiveGraniteMelting) {
                     this.world.setParticle(x, y, PARTICLE_TYPES.LAVA);
-                    // Add heat when melting
-                    this.world.setTemperature(x, y, temp + 50);
+                    // Latent heat absorption: melting consumes heat
+                    this.world.setTemperature(x, y, temp - 100);
                 }
                 break;
             
@@ -131,21 +132,24 @@ export class ThermalUpdater {
                 break;
             
             case PARTICLE_TYPES.LAVA:
-                if (temp < TEMPERATURE.LAVA_SOLIDIFY) {
-                    this.world.setParticle(x, y, PARTICLE_TYPES.BASALT);
-                    // Remove heat when solidifying
-                    this.world.setTemperature(x, y, temp - 50);
+                // Self-cooling: faster if exposed to non-lava; slow radiative cooling even when buried
+                let exposure = 0;
+                for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+                    if (dx === 0 && dy === 0) continue;
+                    const n = this.world.getParticle(x + dx, y + dy);
+                    if (n !== PARTICLE_TYPES.LAVA && n !== PARTICLE_TYPES.BEDROCK) exposure++;
                 }
+                const cool = (exposure >= 3 ? 6 : 2) + 0.5; // surface vs buried + radiative
+                this.world.setTemperature(x, y, temp - cool);
                 
-                // Lava heats surroundings
+                // Lava heats surroundings (reduced to curb runaway)
                 for (let dy = -1; dy <= 1; dy++) {
                     for (let dx = -1; dx <= 1; dx++) {
                         if (dx === 0 && dy === 0) continue;
-                        const nx = x + dx;
-                        const ny = y + dy;
+                        const nx = x + dx, ny = y + dy;
                         if (this.world.inBounds(nx, ny)) {
                             const neighborTemp = this.world.getTemperature(nx, ny);
-                            this.world.setTemperature(nx, ny, neighborTemp + 5);
+                            this.world.setTemperature(nx, ny, neighborTemp + 2);
                         }
                     }
                 }
