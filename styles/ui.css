@@ -8,6 +8,10 @@
     border-top: 1px solid #333;
 }
 
+#primordialControls select, #primordialControls input[type="color"] {
+    min-width: 90px;
+}
+
 .control-group {
     display: flex;
     gap: 10px;

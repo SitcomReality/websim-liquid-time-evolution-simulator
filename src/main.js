@@ -3,6 +3,7 @@ import { Simulation } from './core/Simulation.js';
 import { Canvas } from './ui/Canvas.js';
 import { Controls } from './ui/Controls.js';
 import { Graphs } from './ui/Graphs.js';
+import { PrimordialManager } from './entities/PrimordialManager.js';
 
 class App {
     constructor() {
@@ -11,6 +12,7 @@ class App {
         this.canvas = null;
         this.controls = null;
         this.graphs = null;
+        this.primordials = null;
         
         this.fps = 0;
         this.frameCount = 0;
@@ -151,6 +153,7 @@ class App {
         // Only render if simulation says we should
         if (shouldRender) {
             this.canvas.render();
+            if (this.primordials) this.canvas.renderPrimordials(this.primordials);
         }
         
         // Always update graphs and stats

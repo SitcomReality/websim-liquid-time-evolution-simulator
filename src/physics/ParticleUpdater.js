@@ -105,6 +105,7 @@ export class ParticleUpdater {
             }
             this.weatheringAccumulator = 0;
         }
+        // Primordials handled in main loop via manager
     }
     
     updateParticle(x, y, type, deltaTime) {

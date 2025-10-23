@@ -46,6 +46,22 @@
                 <button id="pressOverlay">⚡ Pressure</button>
             </div>
             
+            <div class="control-group" id="primordialControls">
+                <label>Primordials</label>
+                <select id="primordialDomain">
+                    <option value="life">Life</option>
+                    <option value="water">Water</option>
+                    <option value="granite">Granite</option>
+                    <option value="heat">Heat</option>
+                    <option value="void">Void</option>
+                </select>
+                <input type="color" id="primordialColor" value="#ff66aa">
+                <input type="range" id="primordialSize" min="10" max="50" value="20">
+                <button id="addPrimordial" class="primary">Add</button>
+                <select id="primordialList"></select>
+                <button id="removePrimordial">Remove</button>
+            </div>
+            
             <div class="control-group">
                 <label>Brush</label>
                 <select id="brushType">

@@ -117,4 +117,19 @@ export class Canvas {
         
         this.ctx.putImageData(this.imageData, 0, 0);
     }
+    
+    renderPrimordials(manager) {
+        // Draw entity pixels on top
+        this.ctx.save();
+        for (const e of manager.entities) {
+            if (!e.alive) continue;
+            this.ctx.fillStyle = `rgb(${e.color[0]},${e.color[1]},${e.color[2]})`;
+            const cx = Math.floor(e.x), cy = Math.floor(e.y);
+            for (const off of e.pixelOffsets) {
+                const x = cx + off.x, y = cy + off.y;
+                if (this.world.inBounds(x, y)) this.ctx.fillRect(x, y, 1, 1);
+            }
+        }
+        this.ctx.restore();
+    }
 }
