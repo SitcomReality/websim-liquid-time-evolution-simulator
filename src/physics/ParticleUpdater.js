@@ -10,6 +10,7 @@ import { SlowProcessesUpdater } from './updaters/SlowProcessesUpdater.js';
 import { ThermalUpdater } from './updaters/ThermalUpdater.js';
 import { GeologicalUpdater } from './updaters/GeologicalUpdater.js';
 import { IceUpdater } from './updaters/IceUpdater.js';
+import { CloudUpdater } from './updaters/CloudUpdater.js';
 
 export class ParticleUpdater {
     constructor(world) {
@@ -31,6 +32,7 @@ export class ParticleUpdater {
         this.slowUpdater = new SlowProcessesUpdater(world);
         this.thermalUpdater = new ThermalUpdater(world);
         this.geologicalUpdater = new GeologicalUpdater(world);
+        this.cloudUpdater = new CloudUpdater(world);
     }
     
     update(fidelity, deltaTime) {
@@ -130,6 +132,9 @@ export class ParticleUpdater {
                 break;
             case PARTICLE_TYPES.PLANT:
                 this.plantUpdater.update(x, y, deltaTime);
+                break;
+            case PARTICLE_TYPES.CLOUD:
+                this.cloudUpdater.update(x, y, deltaTime);
                 break;
         }
     }

@@ -94,7 +94,8 @@ export class ThermalUpdater {
                 break;
             
             case PARTICLE_TYPES.STEAM:
-                if (temp < TEMPERATURE.WATER_BOILING) {
+                // Let SteamUpdater/cloud logic govern most condensation; keep a tiny baseline
+                if (temp < 10 && Math.random() < 0.0005) {
                     this.world.setParticle(x, y, PARTICLE_TYPES.WATER);
                 }
                 break;

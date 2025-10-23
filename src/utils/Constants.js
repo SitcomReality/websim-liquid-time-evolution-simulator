@@ -11,7 +11,8 @@ export const PARTICLE_TYPES = {
     ANIMAL: 9,
     BASALT: 10,
     MANTLE: 11,
-    BEDROCK: 12
+    BEDROCK: 12,
+    CLOUD: 13
 };
 
 export const PARTICLE_COLORS = {
@@ -27,7 +28,8 @@ export const PARTICLE_COLORS = {
     [PARTICLE_TYPES.ANIMAL]: [180, 100, 50, 255],
     [PARTICLE_TYPES.BASALT]: [50, 50, 55, 255],
     [PARTICLE_TYPES.MANTLE]: [80, 40, 30, 255],
-    [PARTICLE_TYPES.BEDROCK]: [30, 30, 30, 255]
+    [PARTICLE_TYPES.BEDROCK]: [30, 30, 30, 255],
+    [PARTICLE_TYPES.CLOUD]: [235, 235, 245, 180]
 };
 
 export const PARTICLE_PROPERTIES = {
@@ -42,7 +44,8 @@ export const PARTICLE_PROPERTIES = {
     [PARTICLE_TYPES.ANIMAL]: { density: 1.0, fluid: false, fallSpeed: 0 },
     [PARTICLE_TYPES.BASALT]: { density: 3.0, fluid: false, fallSpeed: 0 },
     [PARTICLE_TYPES.MANTLE]: { density: 3.3, fluid: true, fallSpeed: 0.001 },
-    [PARTICLE_TYPES.BEDROCK]: { density: 4.0, fluid: false, fallSpeed: 0 }
+    [PARTICLE_TYPES.BEDROCK]: { density: 4.0, fluid: false, fallSpeed: 0 },
+    [PARTICLE_TYPES.CLOUD]: { density: 0.05, fluid: true, fallSpeed: 0 }
 };
 
 // Temperature constants (in Celsius)

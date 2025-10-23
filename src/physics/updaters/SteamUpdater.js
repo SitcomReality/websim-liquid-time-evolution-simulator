@@ -28,10 +28,24 @@ export class SteamUpdater {
             this.world.setUpdated(x - dir, y);
         }
         
-        // Chance to condense back to water
-        if (Math.random() < 0.001) {
+        // Humidity-driven cloud formation (cool + crowded -> cloud)
+        const temp = this.world.getTemperature(x, y);
+        let steamNeighbors = 0;
+        for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) {
+            if (dx*dx + dy*dy > 8) continue;
+            if (this.world.getParticle(x + dx, y + dy) === PARTICLE_TYPES.STEAM) steamNeighbors++;
+        }
+        const altitude = y / this.world.height;
+        const coolEnough = temp < 35 || altitude < 0.25;
+        const crowded = steamNeighbors >= 8;
+        if ((coolEnough && crowded) || (coolEnough && Math.random() < 0.002)) {
+            // Condense into cloud with small initial mass stored in data[0]
+            this.world.setParticle(x, y, PARTICLE_TYPES.CLOUD, [1, 0, 0, 0]);
+            return;
+        }
+        // Rare direct condensation to water (weak baseline)
+        if (temp < 25 && Math.random() < 0.0005) {
             this.world.setParticle(x, y, PARTICLE_TYPES.WATER);
         }
     }
 }
-
