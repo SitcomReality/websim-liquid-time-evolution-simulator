@@ -24,8 +24,8 @@ class App {
             sandPercent: 20,
             waterPercent: 15,
             soilPercent: 5,
-            width: 400,
-            height: 300
+            width: 600,
+            height: 400
         };
         
         this.setupSplashScreen();

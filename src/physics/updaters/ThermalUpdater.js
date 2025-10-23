@@ -3,7 +3,7 @@ import { PARTICLE_TYPES, TEMPERATURE, THERMAL_PROPERTIES } from '../../utils/Con
 export class ThermalUpdater {
     constructor(world) {
         this.world = world;
-        this.diffusionRate = 0.2; // Heat diffusion coefficient
+        this.diffusionRate = 0.3; // Heat diffusion coefficient
     }
 
     update(fidelity, deltaTime) {
