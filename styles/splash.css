@@ -1,0 +1,47 @@
+#splashScreen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: #000;
+    z-index: 2000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    text-align: center;
+}
+
+#splashContent {
+    background: #111;
+    border: 1px solid #333;
+    border-radius: 8px;
+    padding: 40px;
+    max-width: 600px;
+    box-shadow: 0 0 50px rgba(0, 255, 255, 0.2);
+}
+
+#splashContent h1 {
+    font-size: 3em;
+    margin-bottom: 10px;
+    color: #0099ff;
+    text-shadow: 0 0 10px rgba(0, 153, 255, 0.5);
+}
+
+#splashContent p {
+    margin-bottom: 30px;
+    color: #888;
+}
+
+#splashContent button {
+    font-size: 1.2em;
+    padding: 12px 24px;
+    margin: 10px;
+}
+
+#splashScreen.hidden {
+    display: none;
+}
+

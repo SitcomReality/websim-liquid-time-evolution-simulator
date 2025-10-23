@@ -15,32 +15,66 @@ class App {
         this.fps = 0;
         this.frameCount = 0;
         this.lastFpsUpdate = performance.now();
+        this.looping = false; // Track if the main loop is running
+
+        this.defaultConfig = {
+            stonePercent: 60,
+            sandPercent: 20,
+            waterPercent: 15,
+            soilPercent: 5,
+            width: 400,
+            height: 300
+        };
         
+        this.setupSplashScreen();
         this.setupNewGameModal();
-        this.setupSplash(); // show splash on load, delay world creation until user starts
-        // Do not create world here automatically
-        // this.createWorld(400, 300, { ... });
+    }
+    
+    setupSplashScreen() {
+        const splashScreen = document.getElementById('splashScreen');
+        const appContainer = document.getElementById('app');
+        const startDefaultGameBtn = document.getElementById('startDefaultGame');
+        const openNewGameModalBtn = document.getElementById('openNewGameModal');
+        const newGameModal = document.getElementById('newGameModal');
+
+        startDefaultGameBtn.addEventListener('click', () => {
+            splashScreen.classList.add('hidden');
+            appContainer.classList.remove('hidden');
+            this.createWorld(this.defaultConfig.width, this.defaultConfig.height, this.defaultConfig);
+        });
+
+        openNewGameModalBtn.addEventListener('click', () => {
+            // Show modal over splash screen
+            newGameModal.classList.remove('hidden');
+        });
     }
     
     setupNewGameModal() {
         const modal = document.getElementById('newGameModal');
-        const newGameBtn = document.getElementById('newGame');
+        const controlsNewGameBtn = document.getElementById('newGame');
         const cancelBtn = document.getElementById('cancelNewGame');
         const confirmBtn = document.getElementById('confirmNewGame');
+        const splashScreen = document.getElementById('splashScreen');
+        const appContainer = document.getElementById('app');
         
         // Update slider values
         ['width', 'height', 'stone', 'sand', 'water', 'soil'].forEach(id => {
             const slider = document.getElementById(`${id === 'width' ? 'worldWidth' : id === 'height' ? 'worldHeight' : id + 'Percent'}`);
             const value = document.getElementById(`${id}Value`);
+            const isPercent = id !== 'width' && id !== 'height';
+
             slider.addEventListener('input', () => {
-                value.textContent = id.includes('Percent') || id === 'stone' || id === 'sand' || id === 'water' || id === 'soil' ? 
+                value.textContent = isPercent ? 
                     slider.value + '%' : slider.value;
             });
         });
         
-        newGameBtn.addEventListener('click', () => {
-            modal.classList.remove('hidden');
-        });
+        // Handle 'New Game' button from controls (for mid-game restart)
+        if (controlsNewGameBtn) {
+             controlsNewGameBtn.addEventListener('click', () => {
+                modal.classList.remove('hidden');
+            });
+        }
         
         cancelBtn.addEventListener('click', () => {
             modal.classList.add('hidden');
@@ -56,29 +90,14 @@ class App {
                 soilPercent: parseInt(document.getElementById('soilPercent').value)
             };
             
+            // If the splash screen is visible, hide it and reveal the main app
+            if (!splashScreen.classList.contains('hidden')) {
+                splashScreen.classList.add('hidden');
+                appContainer.classList.remove('hidden');
+            }
+
             this.createWorld(width, height, config);
             modal.classList.add('hidden');
-        });
-    }
-    
-    setupSplash() {
-        const splash = document.getElementById('splash');
-        const startDefault = document.getElementById('startDefault');
-        const startNewWorld = document.getElementById('startNewWorld');
-
-        startDefault.addEventListener('click', () => {
-            splash.classList.add('hidden');
-            this.createWorld(400, 300, {
-                stonePercent: 60,
-                sandPercent: 20,
-                waterPercent: 15,
-                soilPercent: 5
-            });
-        });
-
-        startNewWorld.addEventListener('click', () => {
-            // Open the New World modal from splash
-            document.getElementById('newGameModal').classList.remove('hidden');
         });
     }
     
@@ -91,10 +110,19 @@ class App {
         const canvasElement = document.getElementById('worldCanvas');
         this.canvas = new Canvas(canvasElement, this.world);
         
-        this.controls = new Controls(this.world, this.simulation, this.canvas);
+        if (!this.controls) {
+            this.controls = new Controls(this.world, this.simulation, this.canvas);
+        } else {
+            // Update controls references if they already exist
+            this.controls.world = this.world;
+            this.controls.simulation = this.simulation;
+            this.controls.canvas = this.canvas;
+        }
         
-        const graphCanvas = document.getElementById('populationGraph');
-        this.graphs = new Graphs(graphCanvas);
+        if (!this.graphs) {
+            const graphCanvas = document.getElementById('populationGraph');
+            this.graphs = new Graphs(graphCanvas);
+        }
         
         // Reset button
         document.getElementById('reset').onclick = () => {
@@ -102,13 +130,21 @@ class App {
             this.simulation.simulationTime = 0;
         };
         
-        this.loop();
+        if (!this.looping) {
+            this.looping = true;
+            this.loop();
+        }
     }
     
     loop() {
         const now = performance.now();
         const deltaTime = 16; // Fixed timestep
         
+        if (!this.simulation) {
+            requestAnimationFrame(() => this.loop());
+            return;
+        }
+
         // Update simulation (may skip rendering)
         const shouldRender = this.simulation.update(deltaTime);
         

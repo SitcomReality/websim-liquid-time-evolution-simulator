@@ -7,23 +7,20 @@
     <link rel="stylesheet" href="styles/main.css">
     <link rel="stylesheet" href="styles/ui.css">
     <link rel="stylesheet" href="styles/graphs.css">
+    <link rel="stylesheet" href="styles/splash.css">
 </head>
 <body>
-    <div id="app">
-        <canvas id="worldCanvas"></canvas>
-        
-        <!-- Splash screen -->
-        <div id="splash" class="splash">
-            <div class="splash-content">
-                <h1>Liquid Time</h1>
-                <p>Evolution simulator — compress or expand time and watch a world flow.</p>
-                <div class="splash-actions">
-                    <button id="startDefault">Start</button>
-                    <button id="startNewWorld">New World</button>
-                </div>
-                <small>Tip: Use the New World button to configure world size and composition.</small>
-            </div>
+    <div id="splashScreen">
+        <div id="splashContent">
+            <h1>Liquid Time</h1>
+            <p>"On a large enough timescale, everything is a liquid"</p>
+            <button id="startDefaultGame" class="primary">Start Default Simulation</button>
+            <button id="openNewGameModal">Customize World</button>
         </div>
+    </div>
+
+    <div id="app" class="hidden">
+        <canvas id="worldCanvas"></canvas>
         
         <div id="controls">
             <div class="control-group">
@@ -77,46 +74,46 @@
         <div id="graphs">
             <canvas id="populationGraph"></canvas>
         </div>
+    </div>
         
-        <div id="newGameModal" class="modal hidden">
-            <div class="modal-content">
-                <h2>New World</h2>
-                <div class="modal-body">
-                    <div class="slider-group">
-                        <label>World Width</label>
-                        <input type="range" id="worldWidth" min="200" max="800" value="400" step="50">
-                        <span id="widthValue">400</span>
-                    </div>
-                    <div class="slider-group">
-                        <label>World Height</label>
-                        <input type="range" id="worldHeight" min="150" max="600" value="300" step="50">
-                        <span id="heightValue">300</span>
-                    </div>
-                    <div class="slider-group">
-                        <label>Stone %</label>
-                        <input type="range" id="stonePercent" min="0" max="100" value="60">
-                        <span id="stoneValue">60%</span>
-                    </div>
-                    <div class="slider-group">
-                        <label>Sand %</label>
-                        <input type="range" id="sandPercent" min="0" max="100" value="20">
-                        <span id="sandValue">20%</span>
-                    </div>
-                    <div class="slider-group">
-                        <label>Water %</label>
-                        <input type="range" id="waterPercent" min="0" max="100" value="15">
-                        <span id="waterValue">15%</span>
-                    </div>
-                    <div class="slider-group">
-                        <label>Soil %</label>
-                        <input type="range" id="soilPercent" min="0" max="100" value="5">
-                        <span id="soilValue">5%</span>
-                    </div>
+    <div id="newGameModal" class="modal hidden">
+        <div class="modal-content">
+            <h2>New World</h2>
+            <div class="modal-body">
+                <div class="slider-group">
+                    <label>World Width</label>
+                    <input type="range" id="worldWidth" min="200" max="800" value="400" step="50">
+                    <span id="widthValue">400</span>
                 </div>
-                <div class="modal-footer">
-                    <button id="cancelNewGame">Cancel</button>
-                    <button id="confirmNewGame" class="primary">Create World</button>
+                <div class="slider-group">
+                    <label>World Height</label>
+                    <input type="range" id="worldHeight" min="150" max="600" value="300" step="50">
+                    <span id="heightValue">300</span>
                 </div>
+                <div class="slider-group">
+                    <label>Stone %</label>
+                    <input type="range" id="stonePercent" min="0" max="100" value="60">
+                    <span id="stoneValue">60%</span>
+                </div>
+                <div class="slider-group">
+                    <label>Sand %</label>
+                    <input type="range" id="sandPercent" min="0" max="100" value="20">
+                    <span id="sandValue">20%</span>
+                </div>
+                <div class="slider-group">
+                    <label>Water %</label>
+                    <input type="range" id="waterPercent" min="0" max="100" value="15">
+                    <span id="waterValue">15%</span>
+                </div>
+                <div class="slider-group">
+                    <label>Soil %</label>
+                    <input type="range" id="soilPercent" min="0" max="100" value="5">
+                    <span id="soilValue">5%</span>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="cancelNewGame">Cancel</button>
+                <button id="confirmNewGame" class="primary">Create World</button>
             </div>
         </div>
     </div>
