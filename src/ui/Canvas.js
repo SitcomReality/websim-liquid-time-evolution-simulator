@@ -1,5 +1,5 @@
 import { PARTICLE_COLORS, PARTICLE_TYPES } from '../utils/Constants.js';
-import { getPlantColor } from '../biology/PlantEcology.js';
+import { getPlantColor, classifyEnvironment } from '../biology/PlantEcology.js';
 
 export class Canvas {
     constructor(canvas, world) {
@@ -151,9 +151,24 @@ export class Canvas {
                 data[idx + 3] = 255;
             } else {
                 // Normal particle rendering
-                const color = (particleType === PARTICLE_TYPES.PLANT)
-                    ? getPlantColor(this.world.particleData[i * 4 + 3] || 0)
-                    : PARTICLE_COLORS[particleType];
+                let color;
+                if (particleType === PARTICLE_TYPES.PLANT) {
+                    const x = i % this.world.width;
+                    const y = Math.floor(i / this.world.width);
+                    // stored plant color code (variant) is at particleData[idx + 3]
+                    const code = this.world.particleData[idx + 3] || 0;
+                    if (code && Number.isFinite(code)) {
+                        color = getPlantColor(code);
+                    } else {
+                        // Fallback: classify local environment to pick an appropriate plant variant/color
+                        const env = classifyEnvironment(this.world, x, y);
+                        const pickCode = env.colorCode || 0;
+                        color = getPlantColor(pickCode);
+                    }
+                } else {
+                    const colorLookup = PARTICLE_COLORS[particleType];
+                    color = colorLookup ? colorLookup : [0,0,0,255];
+                }
                 data[idx] = color[0];
                 data[idx + 1] = color[1];
                 data[idx + 2] = color[2];
