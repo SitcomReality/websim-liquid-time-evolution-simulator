@@ -47,10 +47,10 @@ export class PlantUpdater {
                     this.world.swapParticles(x, y, x, y + 1);
                     this.world.setUpdated(x, y + 1);
                     // gently age while sinking to eventually dissolve if never finding substrate
-                    if (Math.random() < 0.005) this.world.particleData[idx] += 0.5;
+                    if (Math.random() < 0.002) this.world.particleData[idx] += 0.5; // slower aging while sinking
                 } else {
                     // If seed has been underwater too long without finding substrate, dissolve
-                    if ((this.world.particleData[idx] || 0) > 1200) {
+                    if ((this.world.particleData[idx] || 0) > 2400) { // longer lifetime underwater
                         this.world.setParticle(x, y, PARTICLE_TYPES.EMPTY);
                         return;
                     }
@@ -80,11 +80,11 @@ export class PlantUpdater {
                 }
                 if (!attached) {
                     // No substrate found nearby: degrade to seed (float) with some chance, or slowly die
-                    if (Math.random() < 0.08) {
+                    if (Math.random() < 0.04) { // reduced chance to convert to seed
                         this.world.particleData[idx + 1] = 0; // become seed
                         // slightly cool/damage to indicate weakening
-                        this.world.particleData[idx] = (this.world.particleData[idx] || 0) + 20;
-                    } else if ((this.world.particleData[idx + 2] || 0) > 800) {
+                        this.world.particleData[idx] = (this.world.particleData[idx] || 0) + 40;
+                    } else if ((this.world.particleData[idx + 2] || 0) > 1600) { // need to be much older before dying to soil
                         // old plant without attachment dies into soil
                         this.world.setParticle(x, y, PARTICLE_TYPES.SOIL);
                     }
@@ -98,10 +98,14 @@ export class PlantUpdater {
             this.world.getParticle(x - 1, y + 1) === PARTICLE_TYPES.EMPTY &&
             this.world.getParticle(x + 1, y + 1) === PARTICLE_TYPES.EMPTY) {
             // Prefer turning into seed if high above ground, otherwise settle as soil to avoid spamming void
-            if (Math.random() < 0.35) {
+            if (Math.random() < 0.12) { // much less likely to create soil/plant from falling
                 this.world.setParticle(x, y + 1, PARTICLE_TYPES.PLANT, [0, 0, 0, 0]);
-            } else {
+            } else if (Math.random() < 0.06) {
+                // very small chance to create soil; otherwise just become empty
                 this.world.setParticle(x, y + 1, PARTICLE_TYPES.SOIL);
+            } else {
+                // mostly just vanish to empty to avoid rapid soil growth
+                this.world.setParticle(x, y + 1, PARTICLE_TYPES.EMPTY);
             }
             this.world.setParticle(x, y, PARTICLE_TYPES.EMPTY);
             this.world.setUpdated(x, y + 1);
@@ -113,7 +117,7 @@ export class PlantUpdater {
         age += timeFactor;
         this.world.particleData[idx + 2] = age;
         // Assign/refresh color occasionally based on environment (flowers can appear)
-        if (Math.random() < 0.02 * timeFactor) {
+        if (Math.random() < 0.01 * timeFactor) { // halved chance of color/flower churn
             const env = classifyEnvironment(this.world, x, y);
             this.world.particleData[idx + 3] = maybeBloom(this.world.particleData[idx + 3] || env.colorCode, env.fertile);
         }
@@ -122,10 +126,10 @@ export class PlantUpdater {
         // Allow photosynthesis when at least part of canopy is exposed (not strictly empty above).
         const canopyExposed = (above === PARTICLE_TYPES.EMPTY || above === PARTICLE_TYPES.STEAM || above === PARTICLE_TYPES.CLOUD);
         if (canopyExposed) {
-            energy += 0.45 * timeFactor; // robust but slightly reduced from previous aggressive gain
+            energy += 0.12 * timeFactor; // significantly reduced photosynthesis rate
         } else {
             // Even shaded plants slowly photosynthesize (overcast/under-canopy)
-            energy += 0.05 * timeFactor;
+            energy += 0.01 * timeFactor; // much slower when shaded
         }
 
         // Water absorption from a slightly larger neighborhood (roots/wicking)
@@ -134,9 +138,9 @@ export class PlantUpdater {
             for (let dy = 0; dy <= 2 && !absorbed; dy++) { // prefer water below and at same level
                 const px = x + dx, py = y + dy;
                 if (this.world.getParticle(px, py) === PARTICLE_TYPES.WATER) {
-                    energy += 0.25 * timeFactor;
+                    energy += 0.08 * timeFactor; // reduced water energy gain
                     // Very low chance to remove water so plants don't desiccate the world
-                    if (Math.random() < 0.005 * timeFactor) {
+                    if (Math.random() < 0.002 * timeFactor) {
                         this.world.setParticle(px, py, PARTICLE_TYPES.EMPTY);
                     }
                     absorbed = true;
@@ -145,8 +149,8 @@ export class PlantUpdater {
         }
 
         if (type === 0) { // Seed
-            // Seeds require less energy to germinate and can sprout into sand/rock-adjacent spots
-            if (energy > 2.2) {
+            // Seeds require more energy to germinate now (so they don't rapidly convert everywhere)
+            if (energy > 4.5) { // raised threshold
                 this.world.particleData[idx + 1] = 1;
                 energy = 0;
                 // Try to occupy a nearby valid surface (soil, sand, shallow rock)
@@ -174,10 +178,10 @@ export class PlantUpdater {
                 else break;
             }
 
-            if (energy > 5) {
+            if (energy > 8) { // require more energy to trigger reproduction/growth
                 if (height >= 4) {
                     // produce seeds in nearby soil rather than grow taller
-                    // Spread seeds more conservatively and allow establishment on sand/rock edges
+                    // Spread seeds much more conservatively to avoid rapid soil/plant proliferation
                     for (let dx = -4; dx <= 4; dx++) {
                         const nx = x + dx;
                         if (nx < 0 || nx >= this.world.width) continue;
@@ -188,7 +192,7 @@ export class PlantUpdater {
                             const target = this.world.getParticle(nx, ny);
                             if ((target === PARTICLE_TYPES.EMPTY || target === PARTICLE_TYPES.SOIL) &&
                                 (below === PARTICLE_TYPES.SOIL || below === PARTICLE_TYPES.SAND || below === PARTICLE_TYPES.GRANITE || below === PARTICLE_TYPES.BASALT) &&
-                                Math.random() < 0.12) {
+                                Math.random() < 0.04) { // much lower spawn chance
                                 const env = classifyEnvironment(this.world, nx, ny);
                                 this.world.setParticle(nx, ny, PARTICLE_TYPES.PLANT, [0, 0, 0, env.colorCode]); // seed
                                 this.world.setUpdated(nx, ny);
@@ -198,19 +202,21 @@ export class PlantUpdater {
                     }
                     energy = 0;
                 } else {
-                    // Grow upwards as normal
+                    // Grow upwards as normal (slower due to higher threshold)
                     if (this.world.getParticle(x, y - 1) === PARTICLE_TYPES.EMPTY) {
                         const colorCode = this.world.particleData[idx + 3] || 0; // Inherit color code
-                        this.world.setParticle(x, y - 1, PARTICLE_TYPES.PLANT, [0, 1, 0, colorCode]);
-                        energy = 0;
-                        this.world.setUpdated(x, y - 1);
+                        if (Math.random() < 0.75) { // growth chance reduced slightly so growth takes longer
+                            this.world.setParticle(x, y - 1, PARTICLE_TYPES.PLANT, [0, 1, 0, colorCode]);
+                            energy = 0;
+                            this.world.setUpdated(x, y - 1);
+                        }
                     }
                 }
             }
 
-            // Occasional lateral colonization: less frequent but broader substrate acceptance
-            if (age > 150 && Math.random() < 0.0008 * timeFactor) {
-                for (let attempt = 0; attempt < 6; attempt++) {
+            // Occasional lateral colonization: much less frequent so soil production is slow
+            if (age > 300 && Math.random() < 0.00015 * timeFactor) { // age and chance increased/reduced
+                for (let attempt = 0; attempt < 4; attempt++) {
                     const nx = x + (Math.random() * 24 - 12) | 0;
                     const ny = y + (Math.random() * 8 - 4) | 0;
                     if (!this.world.inBounds(nx, ny)) continue;
@@ -219,9 +225,11 @@ export class PlantUpdater {
                     if ((target === PARTICLE_TYPES.EMPTY || target === PARTICLE_TYPES.SOIL) &&
                         (below === PARTICLE_TYPES.SOIL || below === PARTICLE_TYPES.SAND || below === PARTICLE_TYPES.GRANITE || below === PARTICLE_TYPES.BASALT)) {
                         const env = classifyEnvironment(this.world, nx, ny);
-                        this.world.setParticle(nx, ny, PARTICLE_TYPES.PLANT, [0, 0, 0, env.colorCode]);
-                        this.world.setUpdated(nx, ny);
-                        break;
+                        if (Math.random() < 0.06) { // additional check to make lateral colonization rare
+                            this.world.setParticle(nx, ny, PARTICLE_TYPES.PLANT, [0, 0, 0, env.colorCode]);
+                            this.world.setUpdated(nx, ny);
+                            break;
+                        }
                     }
                 }
             }
@@ -229,12 +237,12 @@ export class PlantUpdater {
 
         // Death: make plants more forgiving — require old age AND being buried/overcrowded
         const buriedAbove = this.world.getParticle(x, y - 1) !== PARTICLE_TYPES.EMPTY && this.world.getParticle(x, y - 1) !== PARTICLE_TYPES.PLANT;
-        if (age > 800 || (age > 300 && buriedAbove)) {
+        if (age > 2400 || (age > 1200 && buriedAbove)) { // require much older plants before converting to soil
             this.world.setParticle(x, y, PARTICLE_TYPES.SOIL);
             return;
         }
         // Variant-specific micro-growth: allow colonization on many substrates
-        if (Math.random() < 0.002 * timeFactor) {
+        if (Math.random() < 0.001 * timeFactor) { // slightly reduced micro-growth churn
             const env = classifyEnvironment(this.world, x, y);
             // cactus: small, 3-5 px height
             if (env.variant === 3) {
@@ -244,13 +252,13 @@ export class PlantUpdater {
                         this.world.setParticle(x, y - dy, PARTICLE_TYPES.PLANT, [0, 1, 0, env.colorCode]);
                 }
             } else if (env.variant === 1 || env.variant === 4) {
-                // moss/lichen: spread sideways on rock
+                // moss/lichen: spread sideways on rock but much less often
                 const dir = Math.random() < 0.5 ? -1 : 1;
-                if (this.world.getParticle(x + dir, y) !== PARTICLE_TYPES.BEDROCK)
+                if (Math.random() < 0.08 && this.world.getParticle(x + dir, y) !== PARTICLE_TYPES.BEDROCK)
                     this.world.setParticle(x + dir, y, PARTICLE_TYPES.PLANT, [0, 1, 0, env.colorCode]);
             } else if (env.variant === 2 || env.variant === 5) {
-                // seaweed/coral: grow upward underwater
-                if (this.world.getParticle(x, y - 1) === PARTICLE_TYPES.WATER || this.world.getParticle(x, y) === PARTICLE_TYPES.WATER)
+                // seaweed/coral: grow upward underwater (reduced frequency)
+                if (Math.random() < 0.2 && (this.world.getParticle(x, y - 1) === PARTICLE_TYPES.WATER || this.world.getParticle(x, y) === PARTICLE_TYPES.WATER))
                     this.world.setParticle(x, y - 1, PARTICLE_TYPES.PLANT, [0, 1, 0, env.colorCode]);
             }
         }
