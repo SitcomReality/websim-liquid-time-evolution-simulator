@@ -16,14 +16,32 @@ export class PlantUpdater {
         const below = this.world.getParticle(x, y + 1);
         const currentParticle = this.world.getParticle(x, y);
         const above = this.world.getParticle(x, y - 1);
+        
         const isWaterSurface = (below === PARTICLE_TYPES.WATER && above === PARTICLE_TYPES.EMPTY);
         const isSubmerged = (below === PARTICLE_TYPES.WATER || this.world.getParticle(x - 1, y) === PARTICLE_TYPES.WATER || this.world.getParticle(x + 1, y) === PARTICLE_TYPES.WATER);
-        // If plant is in water: seeds should float up to surface; stems should sink to attach to substrate
+
+        // --- RULE 1: Death at water surface or above steam/lava ---
+        // Prevents floating forests and plants over boiling liquid
+        const isOverHazard = below === PARTICLE_TYPES.STEAM || below === PARTICLE_TYPES.LAVA;
+        if (isWaterSurface || isOverHazard) {
+             // Immediate death into water, soil or empty space
+             if (Math.random() < 0.3) {
+                 this.world.setParticle(x, y, PARTICLE_TYPES.WATER);
+             } else if (Math.random() < 0.5) {
+                 this.world.setParticle(x, y, PARTICLE_TYPES.SOIL);
+             } else {
+                 this.world.setParticle(x, y, PARTICLE_TYPES.EMPTY);
+             }
+             return;
+        }
+
+        // If plant is in water: seeds should sink toward substrate
         if (isSubmerged) {
             // read seed/stem type stored in data (0 = seed, 1 = stem)
             const seedType = this.world.particleData[idx + 1] || 0;
             if (seedType === 0) {
                 // Seed: sink downward toward substrate while underwater; age/dissolve if stuck too long
+                // We rely on the seed being denser than water (density 1.1)
                 if (this.world.getParticle(x, y + 1) === PARTICLE_TYPES.WATER || this.world.getParticle(x, y + 1) === PARTICLE_TYPES.EMPTY) {
                     // move seed downward (sink)
                     this.world.swapParticles(x, y, x, y + 1);
@@ -182,7 +200,8 @@ export class PlantUpdater {
                 } else {
                     // Grow upwards as normal
                     if (this.world.getParticle(x, y - 1) === PARTICLE_TYPES.EMPTY) {
-                        this.world.setParticle(x, y - 1, PARTICLE_TYPES.PLANT, [0, 1, 0, 0]);
+                        const colorCode = this.world.particleData[idx + 3] || 0; // Inherit color code
+                        this.world.setParticle(x, y - 1, PARTICLE_TYPES.PLANT, [0, 1, 0, colorCode]);
                         energy = 0;
                         this.world.setUpdated(x, y - 1);
                     }

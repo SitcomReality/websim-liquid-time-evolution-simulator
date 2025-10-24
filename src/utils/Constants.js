@@ -46,7 +46,7 @@ export const PARTICLE_PROPERTIES = {
     [PARTICLE_TYPES.GRANITE]: { density: 2.7, viscosity: 18.0, flowRate: 0.06, isLiving: false },
     [PARTICLE_TYPES.MANTLE]: { density: 3.3, viscosity: 20.0, flowRate: 0.04, isLiving: false },
     [PARTICLE_TYPES.BEDROCK]: { density: 4.0, viscosity: 30.0, flowRate: 0.02, isLiving: false },
-    [PARTICLE_TYPES.PLANT]: { density: 0.8, viscosity: 100.0, flowRate: 0.0, isLiving: true },
+    [PARTICLE_TYPES.PLANT]: { density: 1.1, viscosity: 100.0, flowRate: 0.0, isLiving: true },
     [PARTICLE_TYPES.ANIMAL]: { density: 1.0, viscosity: 100.0, flowRate: 0.0, isLiving: true }
 };
 

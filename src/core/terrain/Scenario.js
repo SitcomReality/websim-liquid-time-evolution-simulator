@@ -42,7 +42,8 @@ export function generateScenarioTerrain(world, config) {
         // Seed plants
         for (let y = islandTop; y < islandBase; y++) {
             if (world.getParticle(x, y) === PARTICLE_TYPES.SOIL && world.getParticle(x, y - 1) === PARTICLE_TYPES.EMPTY && Math.random() < 0.15) {
-                world.setParticle(x, y, PARTICLE_TYPES.PLANT, [0, 0, 0, 0]);
+                const env = classifyEnvironment(world, x, y);
+                world.setParticle(x, y, PARTICLE_TYPES.PLANT, [0, 1, 0, env.colorCode]); // type 1: stem/established
             }
         }
     }
@@ -82,7 +83,10 @@ export function generateScenarioTerrain(world, config) {
     for (let y = Math.floor(h * 0.50); y < Math.floor(h * 0.60); y++) world.setParticle(tunnelX, y, PARTICLE_TYPES.GRANITE);
     for (let y = coneTop - 6; y < Math.floor(h * 0.50); y++) {
         world.setParticle(tunnelX, y, PARTICLE_TYPES.SOIL);
-        if (world.getParticle(tunnelX, y - 1) === PARTICLE_TYPES.EMPTY && Math.random() < 0.1) world.setParticle(tunnelX, y, PARTICLE_TYPES.PLANT, [0, 0, 0, 0]);
+        if (world.getParticle(tunnelX, y - 1) === PARTICLE_TYPES.EMPTY && Math.random() < 0.1) {
+            const env = classifyEnvironment(world, tunnelX, y);
+            world.setParticle(tunnelX, y, PARTICLE_TYPES.PLANT, [0, 1, 0, env.colorCode]); // type 1: stem/established
+        }
     }
     // Superheat near vent to encourage activity
     for (let y = coneTop; y < coneBase; y++) for (let dx = -10; dx <= 10; dx++) {

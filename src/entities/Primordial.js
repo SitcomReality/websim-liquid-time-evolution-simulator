@@ -87,11 +87,11 @@ export class Primordial {
                 // Create soil/plants in suitable spots
                 if (P === 0 && world.getParticle(x, y + 1) === 4) {
                     const env = classifyEnvironment(world, x, y);
-                    world.setParticle(x, y, 8, [0, 0, 0, env.colorCode]);
+                    world.setParticle(x, y, 8, [0, 1, 0, env.colorCode]); // Stem/Established plant
                 } else if (P === 4 && world.getParticle(x, y - 1) === 0) {
                     if (Math.random() < 0.3) {
                         const env = classifyEnvironment(world, x, y);
-                        world.setParticle(x, y, 8, [0, 0, 0, env.colorCode]);
+                        world.setParticle(x, y, 8, [0, 1, 0, env.colorCode]); // Stem/Established plant
                     }
                 } else if (P === 0 && Math.random() < 0.1) {
                     world.setParticle(x, y, 4);
