@@ -1,9 +1,9 @@
-import { ParticleUpdater } from '../physics/ParticleUpdater.js';
+import { TierManager } from './TierManager.js';
+import { Tier1Backend } from './backends/Tier1Backend.js';
 
 export class Simulation {
     constructor(world) {
         this.world = world;
-        this.particleUpdater = new ParticleUpdater(world);
         this.timeScale = 1;
         this.fidelity = 1.0;
         this.running = true;
@@ -17,6 +17,17 @@ export class Simulation {
         // Separate render rate from update rate
         this.renderInterval = 1; // Render every N updates
         this.updatesSinceRender = 0;
+        
+        // Tier management and backend routing
+        this.tierManager = new TierManager({
+            getBackendForTier: (_tier) => {
+                // For now, all tiers route to Tier1Backend until others are implemented
+                return new Tier1Backend(this.world);
+            }
+        });
+        // Initialize active backend for current timeScale
+        this.tierManager.transitionToTier(this.tierManager.getCurrentTier(this.timeScale));
+        this.backend = this.tierManager.activeBackend;
     }
     
     setTimeScale(scale) {
@@ -30,13 +41,18 @@ export class Simulation {
     update(frameDeltaTime) {
         if (!this.running) return false; // Return false = don't render
         
+        // Check for tier transition and refresh backend
+        this.tierManager.updateForTimeScale(this.timeScale);
+        this.backend = this.tierManager.activeBackend || this.backend;
+        if (!this.backend) return true;
+        
         // Calculate how many simulation steps to do based on time scale
         // At high time scales, do multiple updates per frame
         const stepsToRun = Math.max(1, Math.floor(this.timeScale / 10));
         const simulationDeltaTime = frameDeltaTime * this.timeScale / stepsToRun;
         
         for (let i = 0; i < stepsToRun; i++) {
-            this.particleUpdater.update(this.fidelity, simulationDeltaTime);
+            this.backend.update(simulationDeltaTime, this.fidelity);
             this.simulationTime += simulationDeltaTime;
             this.updateCount++;
             this.simulationSteps++;
