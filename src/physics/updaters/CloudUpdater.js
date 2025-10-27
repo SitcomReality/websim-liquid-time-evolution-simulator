@@ -44,17 +44,37 @@ export class CloudUpdater {
 
         // Precipitation when massive and cool
         const precipThreshold = 5;
+        // As clouds grow, they darken and become storm-prone; larger mass -> heavier precipitation
         if (mass >= precipThreshold) {
             const freezing = temp <= 0;
-            for (let drops = 0; drops < 3; drops++) {
-                const dx = windDir * (Math.random() < 0.6 ? 1 : 0);
-                if (this.world.getParticle(x + dx, y + 1) === PARTICLE_TYPES.EMPTY) {
-                    this.world.setParticle(x + dx, y + 1, freezing ? PARTICLE_TYPES.ICE : PARTICLE_TYPES.WATER);
-                    const tBelow = this.world.getTemperature(x + dx, y + 1);
-                    this.world.setTemperature(x + dx, y + 1, tBelow - (freezing ? 8 : 5));
+            // stormIntensity scales with mass: small showers -> heavy storms
+            const stormIntensity = Math.min(1.0, (mass - precipThreshold) / (precipThreshold * 3) + 0.25);
+            const drops = Math.ceil(2 + stormIntensity * 10);
+            for (let d = 0; d < drops; d++) {
+                const dx = (Math.random() < 0.6 ? windDir : (Math.random() < 0.5 ? -windDir : 0));
+                const tx = x + (Math.random() * 3 - 1) | 0 + dx;
+                const ty = y + 1 + (Math.random() * 2 | 0);
+                if (!this.world.inBounds(tx, ty)) continue;
+                if (this.world.getParticle(tx, ty) === PARTICLE_TYPES.EMPTY || Math.random() < 0.4) {
+                    this.world.setParticle(tx, ty, freezing ? PARTICLE_TYPES.ICE : PARTICLE_TYPES.WATER);
+                    const tBelow = this.world.getTemperature(tx, ty);
+                    this.world.setTemperature(tx, ty, tBelow - (freezing ? 8 : 5));
                 }
             }
-            mass = Math.max(1, mass - 2.0);
+            // Heavy storms dissipate large fraction of the cloud mass and can trigger neighboring cloud collapse
+            const bleed = 1 + Math.floor(stormIntensity * 6);
+            mass = Math.max(1, mass - bleed);
+            if (stormIntensity > 0.8) {
+                // Severe storm: collapse some neighboring cloud cells into precipitation immediately
+                for (let ry = -2; ry <= 2; ry++) for (let rx = -3; rx <= 3; rx++) {
+                    const nx = x + rx, ny = y + ry;
+                    if (!this.world.inBounds(nx, ny)) continue;
+                    if (this.world.getParticle(nx, ny) === PARTICLE_TYPES.CLOUD && Math.random() < 0.45) {
+                        this.world.setParticle(nx, ny, (this.world.getTemperature(nx, ny) <= 0) ? PARTICLE_TYPES.ICE : PARTICLE_TYPES.WATER);
+                        this.world.setTemperature(nx, ny, this.world.getTemperature(nx, ny) - 6);
+                    }
+                }
+            }
         }
 
         // Evaporate in warm air
