@@ -20,16 +20,34 @@ export class Primordial {
         const minUnique = 5;
         const desired = Math.max(minUnique, Math.floor(this.size));
         const set = new Set();
-        const radius = Math.sqrt(this.size);
-        // Ensure we get 'desired' unique integer offsets
+
+        // Start with an integer grid scan within an initial radius and expand until we have enough unique offsets.
+        let radius = Math.max(2, Math.floor(Math.sqrt(this.size)));
         while (set.size < desired) {
-            const angle = Math.random() * Math.PI * 2;
-            const r = radius * Math.sqrt(Math.random());
-            const ox = Math.floor(Math.cos(angle) * r);
-            const oy = Math.floor(Math.sin(angle) * r);
-            set.add(`${ox},${oy}`);
+            for (let oy = -radius; oy <= radius && set.size < desired; oy++) {
+                for (let ox = -radius; ox <= radius && set.size < desired; ox++) {
+                    if (ox === 0 && oy === 0) {
+                        set.add(`0,0`);
+                        continue;
+                    }
+                    if (ox * ox + oy * oy <= radius * radius) {
+                        set.add(`${ox},${oy}`);
+                    }
+                }
+            }
+            // If a single pass didn't yield enough unique points, expand the radius slightly and try again.
+            if (set.size < desired) radius = Math.min(radius + 2, 12);
+            // If we've expanded to a reasonable limit and still lack points (shouldn't happen), fill with random offsets.
+            if (radius >= 12 && set.size < desired) {
+                while (set.size < desired) {
+                    const ox = Math.floor((Math.random() - 0.5) * 14);
+                    const oy = Math.floor((Math.random() - 0.5) * 14);
+                    set.add(`${ox},${oy}`);
+                }
+            }
         }
-        return Array.from(set).map(s => { const [x,y]=s.split(',').map(Number); return {x,y}; });
+
+        return Array.from(set).map(s => { const [x,y] = s.split(',').map(Number); return { x, y }; });
     }
 
     update(world) {
