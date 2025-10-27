@@ -1,3 +1,5 @@
+import { classifyEnvironment } from '../biology/PlantEcology.js';
+
 export class Primordial {
     constructor(id, domain, color, size, world) {
         this.id = id;
