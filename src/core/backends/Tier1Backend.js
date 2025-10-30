@@ -1,14 +1,26 @@
 import { ParticleUpdater } from '../../physics/ParticleUpdater.js';
+import { ClusterManager } from '../clustering/ClusterManager.js';
 
 export class Tier1Backend {
-  constructor(world) {
+  constructor(world, config = {}) {
     this.world = world;
     this.particleUpdater = new ParticleUpdater(world);
+    
+    // Add clustering system for performance
+    this.clusterManager = new ClusterManager(world, {
+      minClusterSize: config.minClusterSize || 8,
+      maxClusterSize: config.maxClusterSize || 200,
+      scanFrequency: config.scanFrequency || 50
+    });
   }
 
   // Delegate to existing particle update loop
   update(deltaTime, fidelity) {
+    // Update particles as normal
     this.particleUpdater.update(fidelity, deltaTime);
+    
+    // Manage clusters (overhead is minimal)
+    this.clusterManager.update(deltaTime);
   }
 
   // Snapshot particle-world state for transitions
@@ -21,7 +33,8 @@ export class Tier1Backend {
       particles: w.particles.slice(0),
       particleData: w.particleData.slice(0),
       temperature: w.temperature.slice(0),
-      pressure: w.pressure.slice(0)
+      pressure: w.pressure.slice(0),
+      clustering: this.clusterManager.getState()
     };
   }
 
@@ -54,6 +67,11 @@ export class Tier1Backend {
     for (let i = 0; i < lenT; i++) {
       w.temperature[i] = state.temperature[i];
       w.pressure[i] = state.pressure[i];
+    }
+
+    // Restore clustering state if available
+    if (state.clustering) {
+      this.clusterManager.setState(state.clustering);
     }
   }
 }
