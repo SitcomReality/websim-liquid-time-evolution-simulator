@@ -1,1 +1,74 @@
-```\n/**\n * SimulationPanel\n * Manages simulation controls: play/pause, overlays, fidelity settings.\n */\nexport class SimulationPanel {\n  constructor(simulation, canvas) {\n    this.simulation = simulation;\n    this.canvas = canvas;\n    this.setup();\n  }\n\n  setup() {\n    this.setupPlayPause();\n    this.setupFidelity();\n    this.setupOverlays();\n  }\n\n  setupPlayPause() {\n    const playPauseBtn = document.getElementById('playPause');\n    if (playPauseBtn) {\n      playPauseBtn.addEventListener('click', () => {\n        const running = this.simulation.togglePause();\n        playPauseBtn.textContent = running ? '⏸️ Pause' : '▶️ Play';\n      });\n    }\n  }\n\n  setupFidelity() {\n    const fidelitySlider = document.getElementById('fidelity');\n    const fidelityValue = document.getElementById('fidelityValue');\n\n    if (fidelitySlider) {\n      fidelitySlider.addEventListener('input', (e) => {\n        const value = parseInt(e.target.value);\n        this.simulation.setFidelity(value / 100);\n        \n        if (fidelityValue) {\n          fidelityValue.textContent = `${value}%`;\n        }\n      });\n    }\n  }\n\n  setupOverlays() {\n    const tempBtn = document.getElementById('tempOverlay');\n    const pressBtn = document.getElementById('pressOverlay');\n    const windBtn = document.getElementById('windOverlay');\n\n    if (tempBtn) {\n      tempBtn.addEventListener('click', () => {\n        this.canvas.toggleTemperatureOverlay();\n        this.updateOverlayButtons(tempBtn, pressBtn, windBtn);\n      });\n    }\n\n    if (pressBtn) {\n      pressBtn.addEventListener('click', () => {\n        this.canvas.togglePressureOverlay();\n        this.updateOverlayButtons(pressBtn, tempBtn, windBtn);\n      });\n    }\n\n    if (windBtn) {\n      windBtn.addEventListener('click', () => {\n        this.canvas.toggleWindOverlay();\n        this.updateOverlayButtons(windBtn, tempBtn, pressBtn);\n      });\n    }\n  }\n\n  updateOverlayButtons(active, ...others) {\n    active.classList.add('active');\n    for (const btn of others) {\n      if (btn) btn.classList.remove('active');\n    }\n  }\n}\n\n\n```
+export class SimulationPanel {
+  constructor(simulation, canvas) {
+    this.simulation = simulation;
+    this.canvas = canvas;
+    this.setup();
+  }
+
+  setup() {
+    this.setupPlayPause();
+    this.setupFidelity();
+    this.setupOverlays();
+  }
+
+  setupPlayPause() {
+    const playPauseBtn = document.getElementById('playPause');
+    if (playPauseBtn) {
+      playPauseBtn.addEventListener('click', () => {
+        const running = this.simulation.togglePause();
+        playPauseBtn.textContent = running ? '⏸️ Pause' : '▶️ Play';
+      });
+    }
+  }
+
+  setupFidelity() {
+    const fidelitySlider = document.getElementById('fidelity');
+    const fidelityValue = document.getElementById('fidelityValue');
+
+    if (fidelitySlider) {
+      fidelitySlider.addEventListener('input', (e) => {
+        const value = parseInt(e.target.value, 10);
+        this.simulation.setFidelity(value / 100);
+
+        if (fidelityValue) {
+          fidelityValue.textContent = `${value}%`;
+        }
+      });
+    }
+  }
+
+  setupOverlays() {
+    const tempBtn = document.getElementById('tempOverlay');
+    const pressBtn = document.getElementById('pressOverlay');
+    const windBtn = document.getElementById('windOverlay');
+
+    if (tempBtn) {
+      tempBtn.addEventListener('click', () => {
+        this.canvas.toggleTemperatureOverlay();
+        this.updateOverlayButtons(tempBtn, pressBtn, windBtn);
+      });
+    }
+
+    if (pressBtn) {
+      pressBtn.addEventListener('click', () => {
+        this.canvas.togglePressureOverlay();
+        this.updateOverlayButtons(pressBtn, tempBtn, windBtn);
+      });
+    }
+
+    if (windBtn) {
+      windBtn.addEventListener('click', () => {
+        this.canvas.toggleWindOverlay();
+        this.updateOverlayButtons(windBtn, tempBtn, pressBtn);
+      });
+    }
+  }
+
+  updateOverlayButtons(active, ...others) {
+    if (active) active.classList.add('active');
+    for (const btn of others) {
+      if (btn) btn.classList.remove('active');
+    }
+  }
+}
+
