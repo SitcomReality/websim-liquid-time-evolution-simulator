@@ -1,1 +1,186 @@
-```\n/**\n * Misc helpers used by serializers (downsample/upsample and loss estimation).\n */\n\n/**\n * Merge similar adjacent cells to reduce field complexity.\n */\nexport function simplifyFields(fields, factor = 2) {\n  const newWidth = Math.ceil(fields.width / factor);\n  const newHeight = Math.ceil(fields.height / factor);\n\n  const simplified = {\n    width: newWidth,\n    height: newHeight,\n    cellSize: fields.cellSize * factor,\n    elevation: new Float32Array(newWidth * newHeight),\n    material: {\n      sand: new Float32Array(newWidth * newHeight),\n      soil: new Float32Array(newWidth * newHeight),\n      granite: new Float32Array(newWidth * newHeight),\n      basalt: new Float32Array(newWidth * newHeight)\n    },\n    climate: {\n      temperature: new Float32Array(newWidth * newHeight),\n      precipitation: new Float32Array(newWidth * newHeight),\n      windDirX: new Float32Array(newWidth * newHeight),\n      windDirY: new Float32Array(newWidth * newHeight)\n    }\n  };\n\n  for (let ny = 0; ny < newHeight; ny++) {\n    for (let nx = 0; nx < newWidth; nx++) {\n      let elevSum = 0, sandSum = 0, soilSum = 0, graniteSum = 0, basaltSum = 0;\n      let tempSum = 0, precipSum = 0;\n      let count = 0;\n\n      const y0 = ny * factor;\n      const x0 = nx * factor;\n\n      for (let dy = 0; dy < factor; dy++) {\n        for (let dx = 0; dx < factor; dx++) {\n          const ox = x0 + dx;\n          const oy = y0 + dy;\n          if (ox < fields.width && oy < fields.height) {\n            const idx = oy * fields.width + ox;\n            elevSum += fields.elevation[idx];\n            sandSum += fields.material.sand[idx];\n            soilSum += fields.material.soil[idx];\n            graniteSum += fields.material.granite[idx];\n            basaltSum += fields.material.basalt[idx];\n            tempSum += fields.climate.temperature[idx];\n            precipSum += fields.climate.precipitation[idx];\n            count++;\n          }\n        }\n      }\n\n      const nIdx = ny * newWidth + nx;\n      simplified.elevation[nIdx] = elevSum / count;\n      simplified.material.sand[nIdx] = sandSum / count;\n      simplified.material.soil[nIdx] = soilSum / count;\n      simplified.material.granite[nIdx] = graniteSum / count;\n      simplified.material.basalt[nIdx] = basaltSum / count;\n      simplified.climate.temperature[nIdx] = tempSum / count;\n      simplified.climate.precipitation[nIdx] = precipSum / count;\n    }\n  }\n\n  return simplified;\n}\n\nexport function upsampleFields(fields, factor = 2) {\n  const newWidth = fields.width * factor;\n  const newHeight = fields.height * factor;\n\n  const upsampled = {\n    width: newWidth,\n    height: newHeight,\n    cellSize: fields.cellSize / factor,\n    elevation: new Float32Array(newWidth * newHeight),\n    material: {\n      sand: new Float32Array(newWidth * newHeight),\n      soil: new Float32Array(newWidth * newHeight),\n      granite: new Float32Array(newWidth * newHeight),\n      basalt: new Float32Array(newWidth * newHeight)\n    },\n    climate: {\n      temperature: new Float32Array(newWidth * newHeight),\n      precipitation: new Float32Array(newWidth * newHeight),\n      windDirX: new Float32Array(newWidth * newHeight),\n      windDirY: new Float32Array(newWidth * newHeight)\n    }\n  };\n\n  for (let ny = 0; ny < newHeight; ny++) {\n    for (let nx = 0; nx < newWidth; nx++) {\n      const sourceY = Math.floor(ny / factor);\n      const sourceX = Math.floor(nx / factor);\n\n      if (sourceX < fields.width && sourceY < fields.height) {\n        const sIdx = sourceY * fields.width + sourceX;\n        const nIdx = ny * newWidth + nx;\n\n        upsampled.elevation[nIdx] = fields.elevation[sIdx];\n        upsampled.material.sand[nIdx] = fields.material.sand[sIdx];\n        upsampled.material.soil[nIdx] = fields.material.soil[sIdx];\n        upsampled.material.granite[nIdx] = fields.material.granite[sIdx];\n        upsampled.material.basalt[nIdx] = fields.material.basalt[sIdx];\n        upsampled.climate.temperature[nIdx] = fields.climate.temperature[sIdx];\n        upsampled.climate.precipitation[nIdx] = fields.climate.precipitation[sIdx];\n        upsampled.climate.windDirX[nIdx] = fields.climate.windDirX[sIdx];\n        upsampled.climate.windDirY[nIdx] = fields.climate.windDirY[sIdx];\n      }\n    }\n  }\n\n  return upsampled;\n}\n\n/**\n * Estimate information retained/loss for conversions.\n */\nexport function estimateConversionLoss(sourceState, conversionPath) {\n  const metrics = {\n    type: conversionPath,\n    informationRetained: 0,\n    warnings: []\n  };\n\n  switch (conversionPath) {\n    case 'particles->fields':\n      const cellArea = (sourceState.cellSize || 16) ** 2;\n      metrics.informationRetained = Math.min(1, 1 / cellArea);\n      metrics.warnings.push('Spatial detail aggregated; individual particle behavior lost');\n      break;\n    case 'fields->particles':\n      metrics.informationRetained = 0.6;\n      metrics.warnings.push('Reconstructed particles are probabilistic; exact state not recoverable');\n      break;\n    case 'fields->plates':\n      metrics.informationRetained = 0.2;\n      metrics.warnings.push('Plate abstraction loses local erosion/deposition details');\n      metrics.warnings.push('Velocity computed from gradients; precise flow lost');\n      break;\n    case 'plates->fields':\n      metrics.informationRetained = 0.4;\n      metrics.warnings.push('Plate projection is generalized; fine structures reconstructed');\n      break;\n    default:\n      metrics.informationRetained = 0;\n      metrics.warnings.push('Unknown conversion path');\n  }\n\n  return metrics;\n}\n\n\n```\n\nsrc/core/state/serializers/SerializerHelpers.js\n```\n/**\n * Misc helpers used by serializers (downsample/upsample and loss estimation).\n */\n\n/**\n * Merge similar adjacent cells to reduce field complexity.\n */\nexport function simplifyFields(fields, factor = 2) {\n  const newWidth = Math.ceil(fields.width / factor);\n  const newHeight = Math.ceil(fields.height / factor);\n\n  const simplified = {\n    width: newWidth,\n    height: newHeight,\n    cellSize: fields.cellSize * factor,\n    elevation: new Float32Array(newWidth * newHeight),\n    material: {\n      sand: new Float32Array(newWidth * newHeight),\n      soil: new Float32Array(newWidth * newHeight),\n      granite: new Float32Array(newWidth * newHeight),\n      basalt: new Float32Array(newWidth * newHeight)\n    },\n    climate: {\n      temperature: new Float32Array(newWidth * newHeight),\n      precipitation: new Float32Array(newWidth * newHeight),\n      windDirX: new Float32Array(newWidth * newHeight),\n      windDirY: new Float32Array(newWidth * newHeight)\n    }\n  };\n\n  for (let ny = 0; ny < newHeight; ny++) {\n    for (let nx = 0; nx < newWidth; nx++) {\n      let elevSum = 0, sandSum = 0, soilSum = 0, graniteSum = 0, basaltSum = 0;\n      let tempSum = 0, precipSum = 0;\n      let count = 0;\n\n      const y0 = ny * factor;\n      const x0 = nx * factor;\n\n      for (let dy = 0; dy < factor; dy++) {\n        for (let dx = 0; dx < factor; dx++) {\n          const ox = x0 + dx;\n          const oy = y0 + dy;\n          if (ox < fields.width && oy < fields.height) {\n            const idx = oy * fields.width + ox;\n            elevSum += fields.elevation[idx];\n            sandSum += fields.material.sand[idx];\n            soilSum += fields.material.soil[idx];\n            graniteSum += fields.material.granite[idx];\n            basaltSum += fields.material.basalt[idx];\n            tempSum += fields.climate.temperature[idx];\n            precipSum += fields.climate.precipitation[idx];\n            count++;\n          }\n        }\n      }\n\n      const nIdx = ny * newWidth + nx;\n      simplified.elevation[nIdx] = elevSum / count;\n      simplified.material.sand[nIdx] = sandSum / count;\n      simplified.material.soil[nIdx] = soilSum / count;\n      simplified.material.granite[nIdx] = graniteSum / count;\n      simplified.material.basalt[nIdx] = basaltSum / count;\n      simplified.climate.temperature[nIdx] = tempSum / count;\n      simplified.climate.precipitation[nIdx] = precipSum / count;\n    }\n  }\n\n  return simplified;\n}\n\nexport function upsampleFields(fields, factor = 2) {\n  const newWidth = fields.width * factor;\n  const newHeight = fields.height * factor;\n\n  const upsampled = {\n    width: newWidth,\n    height: newHeight,\n    cellSize: fields.cellSize / factor,\n    elevation: new Float32Array(newWidth * newHeight),\n    material: {\n      sand: new Float32Array(newWidth * newHeight),\n      soil: new Float32Array(newWidth * newHeight),\n      granite: new Float32Array(newWidth * newHeight),\n      basalt: new Float32Array(newWidth * newHeight)\n    },\n    climate: {\n      temperature: new Float32Array(newWidth * newHeight),\n      precipitation: new Float32Array(newWidth * newHeight),\n      windDirX: new Float32Array(newWidth * newHeight),\n      windDirY: new Float32Array(newWidth * newHeight)\n    }\n  };\n\n  for (let ny = 0; ny < newHeight; ny++) {\n    for (let nx = 0; nx < newWidth; nx++) {\n      const sourceY = Math.floor(ny / factor);\n      const sourceX = Math.floor(nx / factor);\n\n      if (sourceX < fields.width && sourceY < fields.height) {\n        const sIdx = sourceY * fields.width + sourceX;\n        const nIdx = ny * newWidth + nx;\n\n        upsampled.elevation[nIdx] = fields.elevation[sIdx];\n        upsampled.material.sand[nIdx] = fields.material.sand[sIdx];\n        upsampled.material.soil[nIdx] = fields.material.soil[sIdx];\n        upsampled.material.granite[nIdx] = fields.material.granite[sIdx];\n        upsampled.material.basalt[nIdx] = fields.material.basalt[sIdx];\n        upsampled.climate.temperature[nIdx] = fields.climate.temperature[sIdx];\n        upsampled.climate.precipitation[nIdx] = fields.climate.precipitation[sIdx];\n        upsampled.climate.windDirX[nIdx] = fields.climate.windDirX[sIdx];\n        upsampled.climate.windDirY[nIdx] = fields.climate.windDirY[sIdx];\n      }\n    }\n  }\n\n  return upsampled;\n}\n\n/**\n * Estimate information retained/loss for conversions.\n */\nexport function estimateConversionLoss(sourceState, conversionPath) {\n  const metrics = {\n    type: conversionPath,\n    informationRetained: 0,\n    warnings: []\n  };\n\n  switch (conversionPath) {\n    case 'particles->fields':\n      const cellArea = (sourceState.cellSize || 16) ** 2;\n      metrics.informationRetained = Math.min(1, 1 / cellArea);\n      metrics.warnings.push('Spatial detail aggregated; individual particle behavior lost');\n      break;\n    case 'fields->particles':\n      metrics.informationRetained = 0.6;\n      metrics.warnings.push('Reconstructed particles are probabilistic; exact state not recoverable');\n      break;\n    case 'fields->plates':\n      metrics.informationRetained = 0.2;\n      metrics.warnings.push('Plate abstraction loses local erosion/deposition details');\n      metrics.warnings.push('Velocity computed from gradients; precise flow lost');\n      break;\n    case 'plates->fields':\n      metrics.informationRetained = 0.4;\n      metrics.warnings.push('Plate projection is generalized; fine structures reconstructed');\n      break;\n    default:\n      metrics.informationRetained = 0;\n      metrics.warnings.push('Unknown conversion path');\n  }\n\n  return metrics;\n}\n\n\n```\n\nsrc/core/state/serializers/SerializerHelpers.js\n```\n/**\n * Misc helpers used by serializers (downsample/upsample and loss estimation).\n */\n\n/**\n * Merge similar adjacent cells to reduce field complexity.\n */\nexport function simplifyFields(fields, factor = 2) {\n  const newWidth = Math.ceil(fields.width / factor);\n  const newHeight = Math.ceil(fields.height / factor);\n\n  const simplified = {\n    width: newWidth,\n    height: newHeight,\n    cellSize: fields.cellSize * factor,\n    elevation: new Float32Array(newWidth * newHeight),\n    material: {\n      sand: new Float32Array(newWidth * newHeight),\n      soil: new Float32Array(newWidth * newHeight),\n      granite: new Float32Array(newWidth * newHeight),\n      basalt: new Float32Array(newWidth * newHeight)\n    },\n    climate: {\n      temperature: new Float32Array(newWidth * newHeight),\n      precipitation: new Float32Array(newWidth * newHeight),\n      windDirX: new Float32Array(newWidth * newHeight),\n      windDirY: new Float32Array(newWidth * newHeight)\n    }\n  };\n\n  for (let ny = 0; ny < newHeight; ny++) {\n    for (let nx = 0; nx < newWidth; nx++) {\n      let elevSum = 0, sandSum = 0, soilSum = 0, graniteSum = 0, basaltSum = 0;\n      let tempSum = 0, precipSum = 0;\n      let count = 0;\n\n      const y0 = ny * factor;\n      const x0 = nx * factor;\n\n      for (let dy = 0; dy < factor; dy++) {\n        for (let dx = 0; dx < factor; dx++) {\n          const ox = x0 + dx;\n          const oy = y0 + dy;\n          if (ox < fields.width && oy < fields.height) {\n            const idx = oy * fields.width + ox;\n            elevSum += fields.elevation[idx];\n            sandSum += fields.material.sand[idx];\n            soilSum += fields.material.soil[idx];\n            graniteSum += fields.material.granite[idx];\n            basaltSum += fields.material.basalt[idx];\n            tempSum += fields.climate.temperature[idx];\n            precipSum += fields.climate.precipitation[idx];\n            count++;\n          }\n        }\n      }\n\n      const nIdx = ny * newWidth + nx;\n      simplified.elevation[nIdx] = elevSum / count;\n      simplified.material.sand[nIdx] = sandSum / count;\n      simplified.material.soil[nIdx] = soilSum / count;\n      simplified.material.granite[nIdx] = graniteSum / count;\n      simplified.material.basalt[nIdx] = basaltSum / count;\n      simplified.climate.temperature[nIdx] = tempSum / count;\n      simplified.climate.precipitation[nIdx] = precipSum / count;\n    }\n  }\n\n  return simplified;\n}\n\nexport function upsampleFields(fields, factor = 2) {\n  const newWidth = fields.width * factor;\n  const newHeight = fields.height * factor;\n\n  const upsampled = {\n    width: newWidth,\n    height: newHeight,\n    cellSize: fields.cellSize / factor,\n    elevation: new Float32Array(newWidth * newHeight),\n    material: {\n      sand: new Float32Array(newWidth * newHeight),\n      soil: new Float32Array(newWidth * newHeight),\n      granite: new Float32Array(newWidth * newHeight),\n      basalt: new Float32Array(newWidth * newHeight)\n    },\n    climate: {\n      temperature: new Float32Array(newWidth * newHeight),\n      precipitation: new Float32Array(newWidth * newHeight),\n      windDirX: new Float32Array(newWidth * newHeight),\n      windDirY: new Float32Array(newWidth * newHeight)\n    }\n  };\n\n  for (let ny = 0; ny < newHeight; ny++) {\n    for (let nx = 0; nx < newWidth; nx++) {\n      const sourceY = Math.floor(ny / factor);\n      const sourceX = Math.floor(nx / factor);\n\n      if (sourceX < fields.width && sourceY < fields.height) {\n        const sIdx = sourceY * fields.width + sourceX;\n        const nIdx = ny * newWidth + nx;\n\n        upsampled.elevation[nIdx] = fields.elevation[sIdx];\n        upsampled.material.sand[nIdx] = fields.material.sand[sIdx];\n        upsampled.material.soil[nIdx] = fields.material.soil[sIdx];\n        upsampled.material.granite[nIdx] = fields.material.granite[sIdx];\n        upsampled.material.basalt[nIdx] = fields.material.basalt[sIdx];\n        upsampled.climate.temperature[nIdx] = fields.climate.temperature[sIdx];\n        upsampled.climate.precipitation[nIdx] = fields.climate.precipitation[sIdx];\n        upsampled.climate.windDirX[nIdx] = fields.climate.windDirX[sIdx];\n        upsampled.climate.windDirY[nIdx] = fields.climate.windDirY[sIdx];\n      }\n    }\n  }\n\n  return upsampled;\n}\n\n/**\n * Estimate information retained/loss for conversions.\n */\nexport function estimateConversionLoss(sourceState, conversionPath) {\n  const metrics = {\n    type: conversionPath,\n    informationRetained: 0,\n    warnings: []\n  };\n\n  switch (conversionPath) {\n    case 'particles->fields':\n      const cellArea = (sourceState.cellSize || 16) ** 2;\n      metrics.informationRetained = Math.min(1, 1 / cellArea);\n      metrics.warnings.push('Spatial detail aggregated; individual particle behavior lost');\n      break;\n    case 'fields->particles':\n      metrics.informationRetained = 0.6;\n      metrics.warnings.push('Reconstructed particles are probabilistic; exact state not recoverable');\n      break;\n    case 'fields->plates':\n      metrics.informationRetained = 0.2;\n      metrics.warnings.push('Plate abstraction loses local erosion/deposition details');\n      metrics.warnings.push('Velocity computed from gradients; precise flow lost');\n      break;\n    case 'plates->fields':\n      metrics.informationRetained = 0.4;\n      metrics.warnings.push('Plate projection is generalized; fine structures reconstructed');\n      break;\n    default:\n      metrics.informationRetained = 0;\n      metrics.warnings.push('Unknown conversion path');\n  }\n\n  return metrics;\n}\n\n\n```\n\nsrc/core/state/serializers/SerializerHelpers.js\n```\n/**\n * Misc helpers used by serializers (downsample/upsample and loss estimation).\n*/\n\n/**\n * Merge similar adjacent cells to reduce field complexity.\n */\nexport function simplifyFields(fields, factor = 2) {\n  const newWidth = Math.ceil(fields.width / factor);\n  const newHeight = Math.ceil(fields.height / factor);\n\n  const simplified = {\n    width: newWidth,\n    height: newHeight,\n    cellSize: fields.cellSize * factor,\n    elevation: new Float32Array(newWidth * newHeight),\n    material: {\n      sand: new Float32Array(newWidth * newHeight),\n      soil: new Float32Array(newWidth * newHeight),\n      granite: new Float32Array(newWidth * newHeight),\n      basalt: new Float32Array(newWidth * newHeight)\n    },\n    climate: {\n      temperature: new Float32Array(newWidth * newHeight),\n      precipitation: new Float32Array(newWidth * newHeight),\n      windDirX: new Float32Array(newWidth * newHeight),\n      windDirY: new Float32Array(newWidth * newHeight)\n    }\n  };\n\n  for (let ny = 0; ny < newHeight; ny++) {\n    for (let nx = 0; nx < newWidth; nx++) {\n      let elevSum = 0, sandSum = 0, soilSum = 0, graniteSum = 0, basaltSum = 0;\n      let tempSum = 0, precipSum = 0;\n      let count = 0;\n\n      const y0 = ny * factor;\n      const x0 = nx * factor;\n\n      for (let dy = 0; dy < factor; dy++) {\n        for (let dx = 0; dx < factor; dx++) {\n          const ox = x0 + dx;\n          const oy = y0 + dy;\n          if (ox < fields.width && oy < fields.height) {\n            const idx = oy * fields.width + ox;\n            elevSum += fields.elevation[idx];\n            sandSum += fields.material.sand[idx];\n            soilSum += fields.material.soil[idx];\n            graniteSum += fields.material.granite[idx];\n            basaltSum += fields.material.basalt[idx];\n            tempSum += fields.climate.temperature[idx];\n            precipSum += fields.climate.precipitation[idx];\n            count++;\n          }\n        }\n      }\n\n      const nIdx = ny * newWidth + nx;\n      simplified.elevation[nIdx] = elevSum / count;\n      simplified.material.sand[nIdx] = sandSum / count;\n      simplified.material.soil[nIdx] = soilSum / count;\n      simplified.material.granite[nIdx] = graniteSum / count;\n      simplified.material.basalt[nIdx] = basaltSum / count;\n      simplified.climate.temperature[nIdx] = tempSum / count;\n      simplified.climate.precipitation[nIdx] = precipSum / count;\n    }\n  }\n\n  return simplified;\n}\n\nexport function upsampleFields(fields, factor = 2) {\n  const newWidth = fields.width * factor;\n  const newHeight = fields.height * factor;\n\n  const upsampled = {\n    width: newWidth,\n    height: newHeight,\n    cellSize: fields.cellSize / factor,\n    elevation: new Float32Array(newWidth * newHeight),\n    material: {\n      sand: new Float32Array(newWidth * newHeight),\n      soil: new Float32Array(newWidth * newHeight),\n      granite: new Float32Array(newWidth * newHeight),\n      basalt: new Float32Array(newWidth * newHeight)\n    },\n    climate: {\n      temperature: new Float32Array(newWidth * newHeight),\n      precipitation: new Float32Array(newWidth * newHeight),\n      windDirX: new Float32Array(newWidth * newHeight),\n      windDirY: new Float32Array(newWidth * newHeight)\n    }\n  };\n\n  for (let ny = 0; ny < newHeight; ny++) {\n    for (let nx = 0; nx < newWidth; nx++) {\n      const sourceY = Math.floor(ny / factor);\n      const sourceX = Math.floor(nx / factor);\n\n      if (sourceX < fields.width && sourceY < fields.height) {\n        const sIdx = sourceY * fields.width + sourceX;\n        const nIdx = ny * newWidth + nx;\n\n        upsampled.elevation[nIdx] = fields.elevation[sIdx];\n        upsampled.material.sand[nIdx] = fields.material.sand[sIdx];\n        upsampled.material.soil[nIdx] = fields.material.soil[sIdx];\n        upsampled.material.granite[nIdx] = fields.material.granite[sIdx];\n        upsampled.material.basalt[nIdx] = fields.material.basalt[sIdx];\n        upsampled.climate.temperature[nIdx] = fields.climate.temperature[sIdx];\n        upsampled.climate.precipitation[nIdx] = fields.climate.precipitation[sIdx];\n        upsampled.climate.windDirX[nIdx] = fields.climate.windDirX[sIdx];\n        upsampled.climate.windDirY[nIdx] = fields.climate.windDirY[sIdx];\n      }\n    }\n  }\n\n  return upsampled;\n}\n\n/**\n * Estimate information retained/loss for conversions.\n */\nexport function estimateConversionLoss(sourceState, conversionPath) {\n  const metrics = {\n    type: conversionPath,\n    informationRetained: 0,\n    warnings: []\n  };\n\n  switch (conversionPath) {\n    case 'particles->fields':\n      const cellArea = (sourceState.cellSize || 16) ** 2;\n      metrics.informationRetained = Math.min(1, 1 / cellArea);\n      metrics.warnings.push('Spatial detail aggregated; individual particle behavior lost');\n      break;\n    case 'fields->particles':\n      metrics.informationRetained = 0.6;\n      metrics.warnings.push('Reconstructed particles are probabilistic; exact state not recoverable');\n      break;\n    case 'fields->plates':\n      metrics.informationRetained = 0.2;\n      metrics.warnings.push('Plate abstraction loses local erosion/deposition details');\n      metrics.warnings.push('Velocity computed from gradients; precise flow lost');\n      break;\n    case 'plates->fields':\n      metrics.informationRetained = 0.4;\n      metrics.warnings.push('Plate projection is generalized; fine structures reconstructed');\n      break;\n    default:\n      metrics.informationRetained = 0;\n      metrics.warnings.push('Unknown conversion path');\n  }\n\n  return metrics;\n}\n\n\n```\n\nsrc/core/state/serializers/SerializerHelpers.js\n```\n/**\n * Misc helpers used by serializers (downsample/upsample and loss estimation).\n */\n\n/**\n * Merge similar adjacent cells to reduce field complexity.\n */\nexport function simplifyFields(fields, factor = 2) {\n  const newWidth = Math.ceil(fields.width / factor);\n  const newHeight = Math.ceil(fields.height / factor);\n\n  const simplified = {\n    width: newWidth,\n    height: newHeight,\n    cellSize: fields.cellSize * factor,\n    elevation: new Float32Array(newWidth * newHeight),\n    material: {\n      sand: new Float32Array(newWidth * newHeight),\n      soil: new Float32Array(newWidth * newHeight),\n      granite: new Float32Array(newWidth * newHeight),\n      basalt: new Float32Array(newWidth * newHeight)\n    },\n    climate: {\n      temperature: new Float32Array(newWidth * newHeight),\n      precipitation: new Float32Array(newWidth * newHeight),\n      windDirX: new Float32Array(newWidth * newHeight),\n      windDirY: new Float32Array(newWidth * newHeight)\n    }\n  };\n\n  for (let ny = 0; ny < newHeight; ny++) {\n    for (let nx = 0; nx < newWidth; nx++) {\n      let elevSum = 0, sandSum = 0, soilSum = 0, graniteSum = 0, basaltSum = 0;\n      let tempSum = 0, precipSum = 0;\n      let count = 0;\n\n      const y0 = ny * factor;\n      const x0 = nx * factor;\n\n      for (let dy = 0; dy < factor; dy++) {\n        for (let dx = 0; dx < factor; dx++) {\n          const ox = x0 + dx;\n          const oy = y0 + dy;\n          if (ox < fields.width && oy < fields.height) {\n            const idx = oy * fields.width + ox;\n            elevSum += fields.elevation[idx];\n            sandSum += fields.material.sand[idx];\n            soilSum += fields.material.soil[idx];\n            graniteSum += fields.material.granite[idx];\n            basaltSum += fields.material.basalt[idx];\n            tempSum += fields.climate.temperature[idx];\n            precipSum += fields.climate.precipitation[idx];\n            count++;\n          }\n        }\n      }\n\n      const nIdx = ny * newWidth + nx;\n      simplified.elevation[nIdx] = elevSum / count;\n      simplified.material.sand[nIdx] = sandSum / count;\n      simplified.material.soil[nIdx] = soilSum / count;\n      simplified.material.granite[nIdx] = graniteSum / count;\n      simplified.material.basalt[nIdx] = basaltSum / count;\n      simplified.climate.temperature[nIdx] = tempSum / count;\n      simplified.climate.precipitation[nIdx] = precipSum / count;\n    }\n  }\n\n  return simplified;\n}\n\nexport function upsampleFields(fields, factor = 2) {\n  const newWidth = fields.width * factor;\n  const newHeight = fields.height * factor;\n\n  const upsampled = {\n    width: newWidth,\n    height: newHeight,\n    cellSize: fields.cellSize / factor,\n    elevation: new Float32Array(newWidth * newHeight),\n    material: {\n      sand: new Float32Array(newWidth * newHeight),\n      soil: new Float32Array(newWidth * newHeight),\n      granite: new Float32Array(newWidth * newHeight),\n      basalt: new Float32Array(newWidth * newHeight)\n    },\n    climate: {\n      temperature: new Float32Array(newWidth * newHeight),\n      precipitation: new Float32Array(newWidth * newHeight),\n      windDirX: new Float32Array(newWidth * newHeight),\n      windDirY: new Float32Array(newWidth * newHeight)\n    }\n  };\n\n  for (let ny = 0; ny < newHeight; ny++) {\n    for (let nx = 0; nx < newWidth; nx++) {\n      const sourceY = Math.floor(ny / factor);\n      const sourceX = Math.floor(nx / factor);\n        const sIdx = sourceY * fields.width + sourceX;\n        const nIdx = ny * newWidth + nx;\n\n        upsampled.elevation[nIdx] = fields.elevation[sIdx];\n        upsampled.material.sand[nIdx] = fields.material.sand[sIdx];\n        upsampled.material.soil[nIdx] = fields.material.soil[sIdx];\n        upsampled.material.granite[nIdx] = fields.material.granite[sIdx];\n        upsampled.material.basalt[nIdx] = fields.material.basalt[sIdx];\n        upsampled.climate.temperature[nIdx] = fields.climate.temperature[sIdx];\n        upsampled.climate.precipitation[nIdx] = fields.climate.precipitation[sIdx];\n        upsampled.climate.windDirX[nIdx] = fields.climate.windDirX[sIdx];\n        upsampled.climate.windDirY[nIdx] = fields.climate.windDirY[sIdx];\n      }\n    }\n  }\n\n  return upsampled;\n}\n\n/**\n * Estimate information retained/loss for conversions.\n */\nexport function estimateConversionLoss(sourceState, conversionPath) {\n  const metrics = {\n    type: conversionPath,\n    informationRetained: 0,\n    warnings: []\n  };\n\n  switch (conversionPath) {\n    case 'particles->fields':\n      const cellArea = (sourceState.cellSize || 16) ** 2;\n      metrics.informationRetained = Math.min(1, 1 / cellArea);\n      metrics.warnings.push('Spatial detail aggregated; individual particle behavior lost');\n      break;\n    case 'fields->particles':\n      metrics.informationRetained = 0.6;\n      metrics.warnings.push('Reconstructed particles are probabilistic; exact state not recoverable');\n      break;\n    case 'fields->plates':\n      metrics.informationRetained = 0.2;\n      metrics.warnings.push('Plate abstraction loses local erosion/deposition details');\n      metrics.warnings.push('Velocity computed from gradients; precise flow lost');\n      break;\n    case 'plates->fields':\n      metrics.informationRetained = 0.4;\n      metrics.warnings.push('Plate projection is generalized; fine structures reconstructed');\n      break;\n    default:\n      metrics.informationRetained = 0;\n      metrics.warnings.push('Unknown conversion path');\n  }\n\n  return metrics;\n}\n\n\n```\n\nsrc/core/state/serializers/SerializerHelpers.js\n```\n/**\n * Misc helpers used by serializers (downsample/upsample and loss estimation).\n */\n\n/**\n * Merge similar adjacent cells to reduce field complexity.\n */\nexport function simplifyFields(fields, factor = 2) {\n  const newWidth = Math.ceil(fields.width / factor);\n  const newHeight = Math.ceil(fields.height / factor);\n\n  const simplified = {\n    width: newWidth,\n    height: newHeight,\n    cellSize: fields.cellSize * factor,\n    elevation: new Float32Array(newWidth * newHeight),\n    material: {\n      sand: new Float32Array(newWidth * newHeight),\n      soil: new Float32Array(newWidth *
+//
+// Misc helpers used by serializers (downsample/upsample and loss estimation).
+//
+
+/**
+ * Merge similar adjacent cells to reduce field complexity.
+ * @param {Object} fields - Field object with width, height, cellSize, elevation, material, climate
+ * @param {number} factor - Downsample factor (integer)
+ * @returns {Object} simplified fields
+ */
+export function simplifyFields(fields, factor = 2) {
+  const newWidth = Math.ceil(fields.width / factor);
+  const newHeight = Math.ceil(fields.height / factor);
+
+  const simplified = {
+    width: newWidth,
+    height: newHeight,
+    cellSize: fields.cellSize * factor,
+    elevation: new Float32Array(newWidth * newHeight),
+    material: {
+      sand: new Float32Array(newWidth * newHeight),
+      soil: new Float32Array(newWidth * newHeight),
+      granite: new Float32Array(newWidth * newHeight),
+      basalt: new Float32Array(newWidth * newHeight)
+    },
+    climate: {
+      temperature: new Float32Array(newWidth * newHeight),
+      precipitation: new Float32Array(newWidth * newHeight),
+      windDirX: new Float32Array(newWidth * newHeight),
+      windDirY: new Float32Array(newWidth * newHeight)
+    }
+  };
+
+  for (let ny = 0; ny < newHeight; ny++) {
+    for (let nx = 0; nx < newWidth; nx++) {
+      let elevSum = 0,
+        sandSum = 0,
+        soilSum = 0,
+        graniteSum = 0,
+        basaltSum = 0;
+      let tempSum = 0,
+        precipSum = 0;
+      let count = 0;
+
+      const y0 = ny * factor;
+      const x0 = nx * factor;
+
+      for (let dy = 0; dy < factor; dy++) {
+        for (let dx = 0; dx < factor; dx++) {
+          const ox = x0 + dx;
+          const oy = y0 + dy;
+          if (ox < fields.width && oy < fields.height) {
+            const idx = oy * fields.width + ox;
+            elevSum += fields.elevation[idx] || 0;
+            sandSum += (fields.material?.sand?.[idx]) || 0;
+            soilSum += (fields.material?.soil?.[idx]) || 0;
+            graniteSum += (fields.material?.granite?.[idx]) || 0;
+            basaltSum += (fields.material?.basalt?.[idx]) || 0;
+            tempSum += (fields.climate?.temperature?.[idx]) || 0;
+            precipSum += (fields.climate?.precipitation?.[idx]) || 0;
+            count++;
+          }
+        }
+      }
+
+      const nIdx = ny * newWidth + nx;
+      if (count === 0) {
+        simplified.elevation[nIdx] = 0;
+        simplified.material.sand[nIdx] = 0;
+        simplified.material.soil[nIdx] = 0;
+        simplified.material.granite[nIdx] = 0;
+        simplified.material.basalt[nIdx] = 0;
+        simplified.climate.temperature[nIdx] = 0;
+        simplified.climate.precipitation[nIdx] = 0;
+      } else {
+        simplified.elevation[nIdx] = elevSum / count;
+        simplified.material.sand[nIdx] = sandSum / count;
+        simplified.material.soil[nIdx] = soilSum / count;
+        simplified.material.granite[nIdx] = graniteSum / count;
+        simplified.material.basalt[nIdx] = basaltSum / count;
+        simplified.climate.temperature[nIdx] = tempSum / count;
+        simplified.climate.precipitation[nIdx] = precipSum / count;
+      }
+    }
+  }
+
+  return simplified;
+}
+
+/**
+ * Upsample a coarse field into a finer resolution (nearest-neighbor approach).
+ * @param {Object} fields - Coarse field object
+ * @param {number} factor - Upsample factor
+ * @returns {Object} upsampled fields
+ */
+export function upsampleFields(fields, factor = 2) {
+  const newWidth = fields.width * factor;
+  const newHeight = fields.height * factor;
+
+  const upsampled = {
+    width: newWidth,
+    height: newHeight,
+    cellSize: fields.cellSize / factor,
+    elevation: new Float32Array(newWidth * newHeight),
+    material: {
+      sand: new Float32Array(newWidth * newHeight),
+      soil: new Float32Array(newWidth * newHeight),
+      granite: new Float32Array(newWidth * newHeight),
+      basalt: new Float32Array(newWidth * newHeight)
+    },
+    climate: {
+      temperature: new Float32Array(newWidth * newHeight),
+      precipitation: new Float32Array(newWidth * newHeight),
+      windDirX: new Float32Array(newWidth * newHeight),
+      windDirY: new Float32Array(newWidth * newHeight)
+    }
+  };
+
+  for (let ny = 0; ny < newHeight; ny++) {
+    for (let nx = 0; nx < newWidth; nx++) {
+      const sourceY = Math.floor(ny / factor);
+      const sourceX = Math.floor(nx / factor);
+
+      if (sourceX < fields.width && sourceY < fields.height) {
+        const sIdx = sourceY * fields.width + sourceX;
+        const nIdx = ny * newWidth + nx;
+
+        upsampled.elevation[nIdx] = fields.elevation[sIdx] || 0;
+        upsampled.material.sand[nIdx] = (fields.material?.sand?.[sIdx]) || 0;
+        upsampled.material.soil[nIdx] = (fields.material?.soil?.[sIdx]) || 0;
+        upsampled.material.granite[nIdx] = (fields.material?.granite?.[sIdx]) || 0;
+        upsampled.material.basalt[nIdx] = (fields.material?.basalt?.[sIdx]) || 0;
+        upsampled.climate.temperature[nIdx] = (fields.climate?.temperature?.[sIdx]) || 0;
+        upsampled.climate.precipitation[nIdx] = (fields.climate?.precipitation?.[sIdx]) || 0;
+        upsampled.climate.windDirX[nIdx] = (fields.climate?.windDirX?.[sIdx]) || 0;
+        upsampled.climate.windDirY[nIdx] = (fields.climate?.windDirY?.[sIdx]) || 0;
+      }
+    }
+  }
+
+  return upsampled;
+}
+
+/**
+ * Estimate information retained/loss for conversions.
+ * Lightweight heuristic for UI diagnostics.
+ * @param {Object} sourceState - source state (may include cellSize)
+ * @param {string} conversionPath - e.g. 'particles->fields' or 'fields->plates'
+ * @returns {Object} metrics { type, informationRetained: 0..1, warnings: [] }
+ */
+export function estimateConversionLoss(sourceState, conversionPath) {
+  const metrics = {
+    type: conversionPath,
+    informationRetained: 0,
+    warnings: []
+  };
+
+  switch (conversionPath) {
+    case 'particles->fields': {
+      const cellArea = (sourceState.cellSize || 16) ** 2;
+      // Rough heuristic: more area per sample → less retained info
+      metrics.informationRetained = Math.min(1, 1 / cellArea);
+      metrics.warnings.push('Spatial detail aggregated; individual particle behavior lost');
+      break;
+    }
+    case 'fields->particles':
+      metrics.informationRetained = 0.6;
+      metrics.warnings.push('Reconstructed particles are probabilistic; exact state not recoverable');
+      break;
+    case 'fields->plates':
+      metrics.informationRetained = 0.2;
+      metrics.warnings.push('Plate abstraction loses local erosion/deposition details');
+      metrics.warnings.push('Velocity computed from gradients; precise flow lost');
+      break;
+    case 'plates->fields':
+      metrics.informationRetained = 0.4;
+      metrics.warnings.push('Plate projection is generalized; fine structures reconstructed');
+      break;
+    default:
+      metrics.informationRetained = 0;
+      metrics.warnings.push('Unknown conversion path');
+  }
+
+  return metrics;
+}
+
