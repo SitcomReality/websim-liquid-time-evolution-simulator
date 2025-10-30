@@ -107,6 +107,9 @@ export default class App {
 
         const canvasElement = document.getElementById('worldCanvas');
         this.canvas = new Canvas(canvasElement, this.world);
+        
+        // Initialize debug overlay
+        this.canvas.setSimulation(this.simulation);
 
         this.primordials = new PrimordialManager(this.world);
         this.setupPrimordialControls();

@@ -1,5 +1,6 @@
 import { PARTICLE_COLORS, PARTICLE_TYPES } from '../utils/Constants.js';
 import { getPlantColor, classifyEnvironment } from '../biology/PlantEcology.js';
+import { TierDebugOverlay } from './TierDebugOverlay.js';
 
 export class Canvas {
     constructor(canvas, world) {
@@ -12,7 +13,17 @@ export class Canvas {
         this.showPressure = false;
         this.showWind = false;
         
+        // Add debug overlay
+        this.debugOverlay = null;
+        
         this.resize();
+    }
+    
+    setSimulation(simulation) {
+        // Called by App to inject simulation reference
+        if (!this.debugOverlay && simulation) {
+            this.debugOverlay = new TierDebugOverlay(this, this.world, simulation);
+        }
     }
     
     resize() {
@@ -177,6 +188,11 @@ export class Canvas {
         }
         
         this.ctx.putImageData(this.imageData, 0, 0);
+        
+        // Render debug overlay after particles
+        if (this.debugOverlay) {
+            this.debugOverlay.render();
+        }
     }
     
     renderPrimordials(manager) {
