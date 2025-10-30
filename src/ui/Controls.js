@@ -12,6 +12,8 @@ export class Controls {
         this.isDrawing = false;
         
         this.setupEventListeners();
+        this.setupTierControls();
+        this.setupTimeScaleEnhancements();
     }
     
     setupEventListeners() {
@@ -32,14 +34,19 @@ export class Controls {
         });
         this.canvas.canvas.addEventListener('touchend', () => this.stopDrawing());
         
-        // Time scale
+        // Enhanced time scale slider
         const timeScaleSlider = document.getElementById('timeScale');
-        const timeScaleValue = document.getElementById('timeScaleValue');
         timeScaleSlider.addEventListener('input', (e) => {
             const value = parseFloat(e.target.value);
             const scale = Math.pow(2, value / 10);
             this.simulation.setTimeScale(scale);
-            timeScaleValue.textContent = `${scale.toFixed(1)}x`;
+            document.getElementById('timeScaleValue').textContent = `${scale.toFixed(1)}x`;
+            
+            // Update tier markers indicator
+            const canvas = document.getElementById('tierMarkersCanvas');
+            if (canvas) {
+                this.updateSliderIndicator(canvas);
+            }
         });
         
         // Fidelity
@@ -102,6 +109,241 @@ export class Controls {
             document.getElementById('tempOverlay').classList.remove('active');
             document.getElementById('pressOverlay').classList.remove('active');
         });
+    }
+    
+    setupTierControls() {
+        // Tier display
+        const tierDisplay = document.getElementById('tierDisplay');
+        if (!tierDisplay) {
+            const controlsDiv = document.getElementById('controls');
+            const tierPanel = document.createElement('div');
+            tierPanel.id = 'tierDisplay';
+            tierPanel.className = 'tier-panel';
+            tierPanel.innerHTML = `
+                <div class="tier-info">
+                    <div class="tier-header">Simulation Tier</div>
+                    <div id="tierName" class="tier-name">Tier 1: Human Scale</div>
+                    <div id="tierDesc" class="tier-desc">Particle-based physics</div>
+                    <div id="tierStats" class="tier-stats"></div>
+                </div>
+                <div class="tier-controls">
+                    <button id="tierOverride" class="tier-override-btn" title="Force specific tier">Override</button>
+                    <select id="tierSelect" class="tier-select hidden">
+                        <option value="auto">Auto (recommended)</option>
+                        <option value="tier1">Tier 1: Human Scale</option>
+                        <option value="tier2">Tier 2: Geological</option>
+                        <option value="tier3">Tier 3: Tectonic</option>
+                    </select>
+                </div>
+            `;
+            controlsDiv.insertBefore(tierPanel, controlsDiv.firstChild);
+        }
+
+        // Tier override button
+        const tierOverrideBtn = document.getElementById('tierOverride');
+        const tierSelect = document.getElementById('tierSelect');
+        
+        tierOverrideBtn.addEventListener('click', () => {
+            tierSelect.classList.toggle('hidden');
+            tierOverrideBtn.classList.toggle('active');
+        });
+
+        tierSelect.addEventListener('change', (e) => {
+            const value = e.target.value;
+            if (value !== 'auto') {
+                const scaleMap = { tier1: 10, tier2: 5000, tier3: 1000000 };
+                const scale = scaleMap[value];
+                document.getElementById('timeScale').value = Math.log2(scale) * 10;
+                this.simulation.setTimeScale(scale);
+            } else {
+                tierSelect.classList.add('hidden');
+                tierOverrideBtn.classList.remove('active');
+            }
+        });
+
+        // Update tier info periodically
+        setInterval(() => this.updateTierInfo(), 500);
+    }
+
+    setupTimeScaleEnhancements() {
+        const timeScaleSlider = document.getElementById('timeScale');
+        const container = timeScaleSlider.parentElement;
+
+        // Add tier markers canvas
+        const canvas = document.createElement('canvas');
+        canvas.id = 'tierMarkersCanvas';
+        canvas.className = 'tier-markers';
+        canvas.width = 300;
+        canvas.height = 30;
+        container.insertBefore(canvas, timeScaleSlider);
+
+        // Add systems info
+        const systemsInfo = document.createElement('div');
+        systemsInfo.id = 'systemsInfo';
+        systemsInfo.className = 'systems-info';
+        container.appendChild(systemsInfo);
+
+        // Draw tier markers
+        this.drawTierMarkers(canvas);
+
+        // Update systems info periodically
+        setInterval(() => this.updateSystemsInfo(), 500);
+    }
+
+    drawTierMarkers(canvas) {
+        const ctx = canvas.getContext('2d');
+        const width = canvas.width;
+        const height = canvas.height;
+
+        // Clear
+        ctx.fillStyle = 'rgba(0,0,0,0.1)';
+        ctx.fillRect(0, 0, width, height);
+
+        // Tier boundaries (log scale)
+        const tiers = [
+            { name: 'T1', scale: 100, x: 0.33 },
+            { name: 'T2', scale: 100000, x: 0.66 },
+            { name: 'T3', scale: 1000000, x: 1.0 }
+        ];
+
+        ctx.strokeStyle = '#666';
+        ctx.lineWidth = 1;
+        ctx.fillStyle = '#999';
+        ctx.font = '10px Space Mono';
+        ctx.textAlign = 'center';
+
+        for (const tier of tiers) {
+            const x = tier.x * width;
+            ctx.beginPath();
+            ctx.moveTo(x, 0);
+            ctx.lineTo(x, height - 8);
+            ctx.stroke();
+            ctx.fillText(tier.name, x, height - 2);
+        }
+
+        // Current position indicator (will be updated dynamically)
+        this.updateSliderIndicator(canvas);
+    }
+
+    updateSliderIndicator(canvas) {
+        const slider = document.getElementById('timeScale');
+        const scale = Math.pow(2, parseInt(slider.value) / 10);
+        
+        const ctx = canvas.getContext('2d');
+        const width = canvas.width;
+        const height = canvas.height;
+
+        // Normalize scale to 0..1 (log scale)
+        const logMin = Math.log2(1);
+        const logMax = Math.log2(10000000);
+        const logScale = Math.log2(scale);
+        const normalized = (logScale - logMin) / (logMax - logMin);
+        const x = Math.max(0, Math.min(width, normalized * width));
+
+        // Draw indicator
+        ctx.fillStyle = '#0f62fe';
+        ctx.beginPath();
+        ctx.arc(x, height / 2, 3, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    updateTierInfo() {
+        const tierName = document.getElementById('tierName');
+        const tierDesc = document.getElementById('tierDesc');
+        const tierStats = document.getElementById('tierStats');
+        
+        if (!tierName) return;
+
+        const transitionStatus = this.simulation.getTransitionStatus?.();
+        const currentTier = this.simulation.tierManager?.activeTier;
+        const isTransitioning = transitionStatus?.state !== 'idle';
+
+        if (!currentTier) return;
+
+        // Update tier name
+        tierName.textContent = currentTier.name;
+        tierName.classList.toggle('transitioning', isTransitioning);
+
+        // Update description
+        const descriptions = {
+            'HUMAN_SCALE': 'Particle-based physics at 1-100x speed',
+            'GEOLOGICAL_SCALE': 'Field-based erosion & material flow',
+            'TECTONIC_SCALE': 'Plate tectonics & global events'
+        };
+        tierDesc.textContent = descriptions[currentTier.key] || 'Unknown tier';
+
+        // Update stats display
+        let statsHtml = '';
+
+        if (currentTier.key === 'HUMAN_SCALE') {
+            statsHtml = `
+                <div class="stat">Active Systems: Particles, Fluids, Thermal, Plants</div>
+                <div class="stat">Resolution: 1px per particle</div>
+            `;
+        } else if (currentTier.key === 'GEOLOGICAL_SCALE') {
+            statsHtml = `
+                <div class="stat">Active Systems: Erosion, Climate, Landforms</div>
+                <div class="stat">Resolution: 16px per cell</div>
+            `;
+        } else if (currentTier.key === 'TECTONIC_SCALE') {
+            statsHtml = `
+                <div class="stat">Active Systems: Plates, Events, Glaciation</div>
+                <div class="stat">Resolution: 32px per cell</div>
+            `;
+        }
+
+        if (isTransitioning) {
+            statsHtml += `<div class="stat transitioning">⟳ Transitioning...</div>`;
+        }
+
+        tierStats.innerHTML = statsHtml;
+    }
+
+    updateSystemsInfo() {
+        const systemsInfo = document.getElementById('systemsInfo');
+        if (!systemsInfo) return;
+
+        const scale = this.simulation.timeScale;
+        const timeScaleValue = document.getElementById('timeScaleValue');
+
+        // Calculate actual simulation speed (relative to real time)
+        // At 1x: 1 second real time = 1 second sim time
+        // At 100x: 1 second real time = 100 seconds sim time
+        const actualSpeedYears = (scale / 365) * 0.016; // 16ms per frame
+
+        let systemsHtml = `
+            <div class="system-row">
+                <span class="label">Speed:</span>
+                <span class="value">${scale.toFixed(0)}x (~${actualSpeedYears.toExponential(1)} years/frame)</span>
+            </div>
+        `;
+
+        // Show active systems based on tier
+        const activeSystems = this.getActiveSystemsForScale(scale);
+        systemsHtml += `
+            <div class="system-row">
+                <span class="label">Active:</span>
+                <span class="value">${activeSystems.join(', ')}</span>
+            </div>
+        `;
+
+        systemsInfo.innerHTML = systemsHtml;
+    }
+
+    getActiveSystemsForScale(scale) {
+        const systems = [];
+
+        if (scale <= 1000) {
+            systems.push('Particles', 'Fluids', 'Thermal', 'Airflow', 'Biology');
+        }
+        if (scale >= 1000) {
+            systems.push('Erosion', 'Climate', 'Landforms');
+        }
+        if (scale >= 1000000) {
+            systems.push('Plates', 'Tectonics', 'Events');
+        }
+
+        return systems;
     }
     
     startDrawing(e) {
