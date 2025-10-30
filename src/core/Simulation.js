@@ -1,5 +1,6 @@
 import { TierManager } from './TierManager.js';
 import { Tier1Backend } from './backends/Tier1Backend.js';
+import { TransitionCoordinator } from './state/TransitionCoordinator.js';
 
 export class Simulation {
     constructor(world) {
@@ -15,23 +16,30 @@ export class Simulation {
         this.ups = 0;
         
         // Separate render rate from update rate
-        this.renderInterval = 1; // Render every N updates
+        this.renderInterval = 1;
         this.updatesSinceRender = 0;
         
         // Tier management and backend routing
         this.tierManager = new TierManager({
             getBackendForTier: (_tier) => {
-                // For now, all tiers route to Tier1Backend until others are implemented
                 return new Tier1Backend(this.world);
             }
         });
-        // Initialize active backend for current timeScale
         this.tierManager.transitionToTier(this.tierManager.getCurrentTier(this.timeScale));
         this.backend = this.tierManager.activeBackend;
+
+        // Transition coordinator for smooth tier changes
+        this.transitionCoordinator = new TransitionCoordinator(this, this.tierManager, {
+            enableSmoothTransitions: true,
+            validateStateOnTransition: true,
+            preserveVisualContinuity: true,
+            enableLogging: false // Set to true for debugging
+        });
     }
     
     setTimeScale(scale) {
         this.timeScale = scale;
+        // Coordinator will detect tier change in update() and manage transition
     }
 
     setFidelity(fidelity) {
@@ -39,7 +47,10 @@ export class Simulation {
     }
     
     update(frameDeltaTime) {
-        if (!this.running) return false; // Return false = don't render
+        // Coordinate tier transitions (handles pause/convert/resume)
+        this.transitionCoordinator.update(this.timeScale);
+
+        if (!this.running) return false;
         
         // Check for tier transition and refresh backend
         this.tierManager.updateForTimeScale(this.timeScale);
@@ -47,7 +58,6 @@ export class Simulation {
         if (!this.backend) return true;
         
         // Calculate how many simulation steps to do based on time scale
-        // At high time scales, do multiple updates per frame
         const stepsToRun = Math.max(1, Math.floor(this.timeScale / 10));
         const simulationDeltaTime = frameDeltaTime * this.timeScale / stepsToRun;
         
@@ -68,16 +78,14 @@ export class Simulation {
         
         // Decide if we should render this frame
         this.updatesSinceRender++;
-        
-        // At high time scales, render less frequently
         this.renderInterval = Math.max(1, Math.floor(this.timeScale / 50));
         
         if (this.updatesSinceRender >= this.renderInterval) {
             this.updatesSinceRender = 0;
-            return true; // Render this frame
+            return true;
         }
         
-        return false; // Skip rendering
+        return false;
     }
     
     togglePause() {
@@ -86,8 +94,21 @@ export class Simulation {
     }
     
     getElapsedYears() {
-        // Assume 1 second of simulation time at 1x speed = 1 day
         const days = (this.simulationTime / 1000);
         return (days / 365).toFixed(2);
+    }
+
+    /**
+     * Get transition diagnostics (for UI/debugging).
+     */
+    getTransitionStatus() {
+        return this.transitionCoordinator.getDiagnostics();
+    }
+
+    /**
+     * Get conversion history for optimization insights.
+     */
+    getConversionHistory() {
+        return this.transitionCoordinator.getConversionHistory();
     }
 }
