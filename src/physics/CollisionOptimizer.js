@@ -101,9 +101,10 @@ export class CollisionOptimizer {
     this.stats.collisionsDetected = 0;
     
     const collisions = [];
-    const checked = new Set(); // Avoid duplicate checks
     
-    const bruteForceChecks = this.world.size; // O(n²) lower bound
+    // We switch to O(N) direct neighbor checks to prevent the Set from exceeding 
+    // maximum size limit in dense worlds (where spatial hashing is inefficient 
+    // for collision radii of 1 pixel).
     
     for (let i = 0; i < this.world.size; i++) {
       const x1 = i % this.world.width;
@@ -112,32 +113,31 @@ export class CollisionOptimizer {
       
       if (p1 === 0) continue; // Skip empty
       
-      // Get cell and nearby particles
-      const cellIdx = this.getCellIndex(x1, y1);
-      const nearby = this.getNearbyCells(cellIdx);
-      
-      for (const j of nearby) {
-        if (i >= j) continue; // Avoid duplicate checks and self-checks
-        
-        const pairKey = `${i},${j}`;
-        if (checked.has(pairKey)) continue;
-        checked.add(pairKey);
-        
-        this.stats.checksPerformed++;
-        
-        const x2 = j % this.world.width;
-        const y2 = Math.floor(j / this.world.width);
-        const p2 = this.world.getParticle(x2, y2);
-        
-        if (p2 === 0) continue; // Skip empty
-        
-        // Simple distance check (adjacent or same cell = collision candidate)
-        const dx = x2 - x1;
-        const dy = y2 - y1;
-        const distance = Math.sqrt(dx * dx + dy * dy);
-        
-        // Collision threshold: particles in adjacent cells or touching
-        if (distance <= Math.sqrt(2) + 0.5) {
+      // Check 8 immediate grid neighbors (dx, dy)
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if (dx === 0 && dy === 0) continue;
+          
+          const x2 = x1 + dx;
+          const y2 = y1 + dy;
+          
+          if (!this.world.inBounds(x2, y2)) continue;
+          
+          const j = this.world.getIndex(x2, y2);
+          
+          if (i >= j) continue; // Critical: only check pairs where i < j to prevent duplicates
+          
+          this.stats.checksPerformed++;
+          
+          const p2 = this.world.getParticle(x2, y2);
+          
+          if (p2 === 0) continue; // Skip empty
+          
+          // Collision detected (they are adjacent 1x1 particles)
+          const dx_dist = x2 - x1;
+          const dy_dist = y2 - y1;
+          const distance = Math.sqrt(dx_dist * dx_dist + dy_dist * dy_dist);
+
           this.stats.collisionsDetected++;
           collisions.push({ i, j, distance });
         }
@@ -145,7 +145,7 @@ export class CollisionOptimizer {
     }
     
     // Estimate savings vs brute force
-    const bruteForceComplexity = (this.world.size * this.world.size) / 2;
+    const bruteForceComplexity = (this.world.size * (this.world.size - 1)) / 2;
     this.stats.checksSavedVsBruteForce = Math.max(0, bruteForceComplexity - this.stats.checksPerformed);
     
     return collisions;
