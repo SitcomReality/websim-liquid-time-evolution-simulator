@@ -13,6 +13,7 @@ export class Tier2Backend {
     this.cellSize = config.cellSize || 16;
     this.width = Math.ceil(world.width / this.cellSize);
     this.height = Math.ceil(world.height / this.cellSize);
+    this.updateCount = 0;
 
     // Create field grids
     this.materialField = new MaterialField(this.width, this.height, this.cellSize);
@@ -20,9 +21,9 @@ export class Tier2Backend {
     this.climateField = new ClimateField(this.width, this.height, this.cellSize);
 
     const fields = {
-      material: this.materialField,
-      elevation: this.elevationField,
-      climate: this.climateField
+      materialField: this.materialField,
+      elevationField: this.elevationField,
+      climateField: this.climateField
     };
 
     // Initialize subsystems
@@ -30,23 +31,30 @@ export class Tier2Backend {
     this.flow = new MaterialFlowSimulator(fields);
     this.landform = new LandformEvolver(fields);
     this.rockFlow = new ViscousRockFlow(fields);
+    
+    // Inject erosion calculator into flow simulator for integrated calculation
+    this.flow.erosion = this.erosion;
   }
 
   update(deltaTime, fidelity) {
-    // Run erosion calculator
-    this.erosion.update(deltaTime);
-
-    // Apply material flow (deposition/transport)
-    this.flow.update(deltaTime);
-
-    // Update landforms (uplift/subsidence)
-    this.landform.update(deltaTime);
+    this.updateCount++;
     
-    // Apply slow rock deformation
-    this.rockFlow.update(deltaTime);
+    // Core geological processes run at different frequencies
+    
+    // Fast: Erosion and material flow (most frequent)
+    if (this.updateCount % 1 === 0) {
+      this.flow.update(deltaTime * fidelity);
+    }
 
-    // Recalculate flow networks after elevation changes
-    this.elevationField.calculateFlowNetwork();
+    // Medium: Landform evolution (valley deepening, peak rounding)
+    if (this.updateCount % 3 === 0) {
+      this.landform.update(deltaTime * fidelity);
+    }
+    
+    // Slow: Viscous rock flow (deep processes)
+    if (this.updateCount % 5 === 0) {
+      this.rockFlow.update(deltaTime * fidelity);
+    }
 
     // Update climate based on new topography
     this.climateField.updateClimate(this.elevationField);
@@ -86,7 +94,7 @@ export class Tier2Backend {
         }
 
         // Set elevation based on highest solid particle
-        this.elevationField.baseElevation[cy * cellsX + cx] = solidMass > 0 ? (world.height - highestSolidY) : 0;
+        this.elevationField.baseElevation[cy * cellsX + cx] = solidMass > 0 ? (world.height - highestSolidY) / world.height : 0;
         
         // Add materials to material field
         this.materialField.addMaterial(cx, cy, 'sand', sand);
@@ -116,7 +124,7 @@ export class Tier2Backend {
         const y1 = Math.min(world.height, y0 + cs);
 
         const elev = this.elevationField.getElevation(cx, cy);
-        const surfaceY = world.height - Math.floor(elev);
+        const surfaceY = world.height - Math.floor(elev * world.height);
         const dominantType = this.materialField.getDominantType(cx, cy);
 
         for (let y = y0; y < y1; y++) {
@@ -132,7 +140,6 @@ export class Tier2Backend {
     }
   }
 
-  // getState/setState for serialization across tiers
   getState() {
     return {
       kind: 'field_world',
@@ -158,7 +165,6 @@ export class Tier2Backend {
       console.warn("Tier2Backend received incompatible state.");
       return;
     }
-    // For now, this is a simple copy. Later, this would handle resolution changes.
     this.materialField.mass.set(state.material.mass);
     this.materialField.sand.set(state.material.sand);
     this.materialField.soil.set(state.material.soil);
