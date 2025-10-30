@@ -1,5 +1,7 @@
 import { ParticleUpdater } from '../../physics/ParticleUpdater.js';
 import { ClusterManager } from '../clustering/ClusterManager.js';
+import { SubstepController } from '../../physics/SubstepController.js';
+import { CollisionOptimizer } from '../../physics/CollisionOptimizer.js';
 
 export class Tier1Backend {
   constructor(world, config = {}) {
@@ -12,12 +14,43 @@ export class Tier1Backend {
       maxClusterSize: config.maxClusterSize || 200,
       scanFrequency: config.scanFrequency || 50
     });
+
+    // Add numerical stability improvements
+    this.substepController = new SubstepController(world, {
+      maxSafeDisplacement: config.maxSafeDisplacement || 1.5,
+      velocityThreshold: config.velocityThreshold || 1.0,
+      maxSubsteps: config.maxSubsteps || 8
+    });
+
+    this.collisionOptimizer = new CollisionOptimizer(world, {
+      cellSize: config.collisionCellSize || 16
+    });
+
+    this.enableSubstepping = config.enableSubstepping !== false;
+    this.enableCollisionOptimization = config.enableCollisionOptimization !== false;
   }
 
-  // Delegate to existing particle update loop
+  // Delegate to existing particle update loop with sub-stepping
   update(deltaTime, fidelity) {
-    // Update particles as normal
-    this.particleUpdater.update(fidelity, deltaTime);
+    if (this.enableSubstepping) {
+      // Use sub-stepping controller for numerical stability
+      this.substepController.updateWithSubstepping(
+        (dt, f) => this.particleUpdater.update(f, dt),
+        deltaTime,
+        fidelity
+      );
+    } else {
+      // Standard update without sub-stepping
+      this.particleUpdater.update(fidelity, deltaTime);
+    }
+    
+    // Optimize collision detection
+    if (this.enableCollisionOptimization) {
+      this.collisionOptimizer.rebuildGrid();
+      const collisions = this.collisionOptimizer.checkCollisions();
+      // Collisions detected but not yet acted upon in this stub
+      // Can be used for future collision response systems
+    }
     
     // Manage clusters (overhead is minimal)
     this.clusterManager.update(deltaTime);
@@ -73,5 +106,16 @@ export class Tier1Backend {
     if (state.clustering) {
       this.clusterManager.setState(state.clustering);
     }
+  }
+
+  /**
+   * Get combined diagnostics from all optimization systems.
+   */
+  getDiagnostics() {
+    return {
+      substepping: this.substepController.getStats(),
+      collision: this.collisionOptimizer.getStats(),
+      clustering: this.clusterManager.getStats()
+    };
   }
 }
