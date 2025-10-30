@@ -1,1 +1,156 @@
-```\nimport { PARTICLE_TYPES, PARTICLE_PROPERTIES, THERMAL_PROPERTIES } from '../../utils/Constants.js';\nimport { FieldGrid } from '../fields/FieldGrid.js';\n\nexport function fieldsToPlates(fields, plateResolution = 32) {\n  const fieldWidth = fields.width;\n  const fieldHeight = fields.height;\n\n  const platesX = Math.max(2, Math.floor(fieldWidth / plateResolution));\n  const platesY = Math.max(2, Math.floor(fieldHeight / plateResolution));\n\n  const plates = [];\n  const plateIdField = new Uint16Array(fieldWidth * fieldHeight);\n  const plateAgeField = new Float32Array(fieldWidth * fieldHeight);\n\n  for (let py = 0; py < platesY; py++) {\n    for (let px = 0; px < platesX; px++) {\n      const plateId = py * platesX + px;\n      const startCx = Math.floor((px / platesX) * fieldWidth);\n      const endCx = Math.floor(((px + 1) / platesX) * fieldWidth);\n      const startCy = Math.floor((py / platesY) * fieldHeight);\n      const endCy = Math.floor(((py + 1) / platesY) * fieldHeight);\n\n      let graniteCount = 0, basaltCount = 0, sandCount = 0;\n      let densitySum = 0, cellCount = 0;\n\n      for (let cy = startCy; cy < endCy; cy++) {\n        for (let cx = startCx; cx < endCx; cx++) {\n          const idx = cy * fieldWidth + cx;\n          cellCount++;\n          graniteCount += fields.material.granite[idx] || 0;\n          basaltCount += fields.material.basalt[idx] || 0;\n          sandCount += fields.material.sand[idx] || 0;\n          densitySum += (fields.material.granite[idx] || 0) * 2.7 +\n                        (fields.material.basalt[idx] || 0) * 3.0 +\n                        (fields.material.sand[idx] || 0) * 1.5;\n        }\n      }\n\n      const avgDensity = densitySum / Math.max(1, cellCount);\n      const isOceanic = avgDensity > 2.8 || basaltCount > graniteCount;\n      const plateType = isOceanic ? 'oceanic' : 'continental';\n\n      const plate = {\n        id: plateId,\n        type: plateType,\n        density: avgDensity,\n        centerX: (startCx + endCx) / 2,\n        centerY: (startCy + endCy) / 2,\n        minX: startCx,\n        maxX: endCx,\n        minY: startCy,\n        maxY: endCy,\n        // Random initial velocity (will be computed from field slopes)\n        velocityX: (Math.random() - 0.5) * 0.2,\n        velocityY: (Math.random() - 0.5) * 0.2,\n        // Material composition fractions\n        composition: {\n          granite: graniteCount / Math.max(1, cellCount),\n          basalt: basaltCount / Math.max(1, cellCount),\n          sand: sandCount / Math.max(1, cellCount)\n        }\n      };\n\n      plates.push(plate);\n\n      for (let cy = startCy; cy < endCy; cy++) {\n        for (let cx = startCx; cx < endCx; cx++) {\n          const idx = cy * fieldWidth + cx;\n          plateIdField[idx] = plateId;\n          plateAgeField[idx] = Math.random() * 200;\n        }\n      }\n    }\n  }\n\n  // Infer plate velocities from field elevation gradients\n  computePlateVelocitiesFromFields(plates, fields, plateIdField);\n\n  return {\n    plates,\n    plateIdField,\n    plateAgeField,\n    numPlatesX: platesX,\n    numPlatesY: platesY,\n    cellSize: plateResolution,\n    width: fieldWidth,\n    height: fieldHeight\n  };\n}\n\n/**\n * Infer coarse plate velocities from field elevation gradients.\n */\nfunction computePlateVelocitiesFromFields(plates, fields, plateIdField) {\n  const fieldWidth = fields.width;\n  const fieldHeight = fields.height;\n\n  for (const plate of plates) {\n    let gradX = 0, gradY = 0;\n    let sampleCount = 0;\n\n    for (let cy = plate.minY; cy < plate.maxY; cy += Math.max(1, Math.floor((plate.maxY - plate.minY) / 4))) {\n      for (let cx = plate.minX; cx < plate.maxX; cx += Math.max(1, Math.floor((plate.maxX - plate.minX) / 4))) {\n        if (cx > 0 && cx < fieldWidth - 1 && cy > 0 && cy < fieldHeight - 1) {\n          const eLeft = fields.elevation[cy * fieldWidth + (cx - 1)];\n          const eRight = fields.elevation[cy * fieldWidth + (cx + 1)];\n          const eUp = fields.elevation[(cy - 1) * fieldWidth + cx];\n          const eDown = fields.elevation[(cy + 1) * fieldWidth + cx];\n\n          gradX += (eRight - eLeft) / 2;\n          gradY += (eDown - eUp) / 2;\n          sampleCount++;\n        }\n      }\n    }\n\n    if (sampleCount > 0) {\n      gradX /= sampleCount;\n      gradY /= sampleCount;\n      const grad = Math.sqrt(gradX * gradX + gradY * gradY);\n      if (grad > 0.01) {\n        plate.velocityX = -(gradX / grad) * 0.3;\n        plate.velocityY = -(gradY / grad) * 0.3;\n      }\n    }\n  }\n}\n\n\n```\n\n```\nimport { PARTICLE_TYPES, PARTICLE_PROPERTIES, THERMAL_PROPERTIES } from '../../utils/Constants.js';\nimport { FieldGrid } from '../fields/FieldGrid.js';\n\nexport function fieldsToPlates(fields, plateResolution = 32) {\n  const fieldWidth = fields.width;\n  const fieldHeight = fields.height;\n\n  const platesX = Math.max(2, Math.floor(fieldWidth / plateResolution));\n  const platesY = Math.max(2, Math.floor(fieldHeight / plateResolution));\n\n  const plates = [];\n  const plateIdField = new Uint16Array(fieldWidth * fieldHeight);\n  const plateAgeField = new Float32Array(fieldWidth * fieldHeight);\n\n  for (let py = 0; py < platesY; py++) {\n    for (let px = 0; px < platesX; px++) {\n      const plateId = py * platesX + px;\n      const startCx = Math.floor((px / platesX) * fieldWidth);\n      const endCx = Math.floor(((px + 1) / platesX) * fieldWidth);\n      const startCy = Math.floor((py / platesY) * fieldHeight);\n      const endCy = Math.floor(((py + 1) / platesY) * fieldHeight);\n\n      let graniteCount = 0, basaltCount = 0, sandCount = 0;\n      let densitySum = 0, cellCount = 0;\n\n      for (let cy = startCy; cy < endCy; cy++) {\n        for (let cx = startCx; cx < endCx; cx++) {\n          const idx = cy * fieldWidth + cx;\n          cellCount++;\n          graniteCount += fields.material.granite[idx] || 0;\n          basaltCount += fields.material.basalt[idx] || 0;\n          sandCount += fields.material.sand[idx] || 0;\n          densitySum += (fields.material.granite[idx] || 0) * 2.7 +\n                        (fields.material.basalt[idx] || 0) * 3.0 +\n                        (fields.material.sand[idx] || 0) * 1.5;\n        }\n      }\n\n      const avgDensity = densitySum / Math.max(1, cellCount);\n      const isOceanic = avgDensity > 2.8 || basaltCount > graniteCount;\n      const plateType = isOceanic ? 'oceanic' : 'continental';\n\n      const plate = {\n        id: plateId,\n        type: plateType,\n        density: avgDensity,\n        centerX: (startCx + endCx) / 2,\n        centerY: (startCy + endCy) / 2,\n        minX: startCx,\n        maxX: endCx,\n        minY: startCy,\n        maxY: endCy,\n        // Random initial velocity (will be computed from field slopes)\n        velocityX: (Math.random() - 0.5) * 0.2,\n        velocityY: (Math.random() - 0.5) * 0.2,\n        // Material composition fractions\n        composition: {\n          granite: graniteCount / Math.max(1, cellCount),\n          basalt: basaltCount / Math.max(1, cellCount),\n          sand: sandCount / Math.max(1, cellCount)\n        }\n      };\n\n      plates.push(plate);\n\n      for (let cy = startCy; cy < endCy; cy++) {\n        for (let cx = startCx; cx < endCx; cx++) {\n          const idx = cy * fieldWidth + cx;\n          plateIdField[idx] = plateId;\n          plateAgeField[idx] = Math.random() * 200;\n        }\n      }\n    }\n  }\n\n  // Infer plate velocities from field elevation gradients\n  computePlateVelocitiesFromFields(plates, fields, plateIdField);\n\n  return {\n    plates,\n    plateIdField,\n    plateAgeField,\n    numPlatesX: platesX,\n    numPlatesY: platesY,\n    cellSize: plateResolution,\n    width: fieldWidth,\n    height: fieldHeight\n  };\n}\n\n/**\n * Infer coarse plate velocities from field elevation gradients.\n */\nfunction computePlateVelocitiesFromFields(plates, fields, plateIdField) {\n  const fieldWidth = fields.width;\n  const fieldHeight = fields.height;\n\n  for (const plate of plates) {\n    let gradX = 0, gradY = 0;\n    let sampleCount = 0;\n\n    for (let cy = plate.minY; cy < plate.maxY; cy += Math.max(1, Math.floor((plate.maxY - plate.minY) / 4))) {\n      for (let cx = plate.minX; cx < plate.maxX; cx += Math.max(1, Math.floor((plate.maxX - plate.minX) / 4))) {\n        if (cx > 0 && cx < fieldWidth - 1 && cy > 0 && cy < fieldHeight - 1) {\n          const eLeft = fields.elevation[cy * fieldWidth + (cx - 1)];\n          const eRight = fields.elevation[cy * fieldWidth + (cx + 1)];\n          const eUp = fields.elevation[(cy - 1) * fieldWidth + cx];\n          const eDown = fields.elevation[(cy + 1) * fieldWidth + cx];\n\n          gradX += (eRight - eLeft) / 2;\n          gradY += (eDown - eUp) / 2;\n          sampleCount++;\n        }\n      }\n    }\n\n    if (sampleCount > 0) {\n      gradX /= sampleCount;\n      gradY /= sampleCount;\n      const grad = Math.sqrt(gradX * gradX + gradY * gradY);\n      if (grad > 0.01) {\n        plate.velocityX = -(gradX / grad) * 0.3;\n        plate.velocityY = -(gradY / grad) * 0.3;\n      }\n    }\n  }\n}\n\n\n```\n\n```\nimport { PARTICLE_TYPES, PARTICLE_PROPERTIES, THERMAL_PROPERTIES } from '../../utils/Constants.js';\nimport { FieldGrid } from '../fields/FieldGrid.js';\n\nexport function fieldsToPlates(fields, plateResolution = 32) {\n  const fieldWidth = fields.width;\n  const fieldHeight = fields.height;\n\n  const platesX = Math.max(2, Math.floor(fieldWidth / plateResolution));\n  const platesY = Math.max(2, Math.floor(fieldHeight / plateResolution));\n\n  const plates = [];\n  const plateIdField = new Uint16Array(fieldWidth * fieldHeight);\n  const plateAgeField = new Float32Array(fieldWidth * fieldHeight);\n\n  for (let py = 0; py < platesY; py++) {\n    for (let px = 0; px < platesX; px++) {\n      const plateId = py * platesX + px;\n      const startCx = Math.floor((px / platesX) * fieldWidth);\n      const endCx = Math.floor(((px + 1) / platesX) * fieldWidth);\n      const startCy = Math.floor((py / platesY) * fieldHeight);\n      const endCy = Math.floor(((py + 1) / platesY) * fieldHeight);\n\n      let graniteCount = 0, basaltCount = 0, sandCount = 0;\n      let densitySum = 0, cellCount = 0;\n\n      for (let cy = startCy; cy < endCy; cy++) {\n        for (let cx = startCx; cx < endCx; cx++) {\n          const idx = cy * fieldWidth + cx;\n          cellCount++;\n          graniteCount += fields.material.granite[idx] || 0;\n          basaltCount += fields.material.basalt[idx] || 0;\n          sandCount += fields.material.sand[idx] || 0;\n          densitySum += (fields.material.granite[idx] || 0) * 2.7 +\n                        (fields.material.basalt[idx] || 0) * 3.0 +\n                        (fields.material.sand[idx] || 0) * 1.5;\n        }\n      }\n\n      const avgDensity = densitySum / Math.max(1, cellCount);\n      const isOceanic = avgDensity > 2.8 || basaltCount > graniteCount;\n      const plateType = isOceanic ? 'oceanic' : 'continental';\n\n      const plate = {\n        id: plateId,\n        type: plateType,\n        density: avgDensity,\n        centerX: (startCx + endCx) / 2,\n        centerY: (startCy + endCy) / 2,\n        minX: startCx,\n        maxX: endCx,\n        minY: startCy,\n        maxY: endCy,\n        // Random initial velocity (will be computed from field slopes)\n        velocityX: (Math.random() - 0.5) * 0.2,\n        velocityY: (Math.random() - 0.5) * 0.2,\n        // Material composition fractions\n        composition: {\n          granite: graniteCount / Math.max(1, cellCount),\n          basalt: basaltCount / Math.max(1, cellCount),\n          sand: sandCount / Math.max(1, cellCount)\n        }\n      };\n\n      plates.push(plate);\n\n      for (let cy = startCy; cy < endCy; cy++) {\n        for (let cx = startCx; cx < endCx; cx++) {\n          const idx = cy * fieldWidth + cx;\n          plateIdField[idx] = plateId;\n          plateAgeField[idx] = Math.random() * 200;\n        }\n      }\n    }\n  }\n\n  // Infer plate velocities from field elevation gradients\n  computePlateVelocitiesFromFields(plates, fields, plateIdField);\n\n  return {\n    plates,\n    plateIdField,\n    plateAgeField,\n    numPlatesX: platesX,\n    numPlatesY: platesY,\n    cellSize: plateResolution,\n    width: fieldWidth,\n    height: fieldHeight\n  };\n}\n\n/**\n * Infer coarse plate velocities from field elevation gradients.\n */\nfunction computePlateVelocitiesFromFields(plates, fields, plateIdField) {\n  const fieldWidth = fields.width;\n  const fieldHeight = fields.height;\n\n  for (const plate of plates) {\n    let gradX = 0, gradY = 0;\n    let sampleCount = 0;\n\n    for (let cy = plate.minY; cy < plate.maxY; cy += Math.max(1, Math.floor((plate.maxY - plate.minY) / 4))) {\n      for (let cx = plate.minX; cx < plate.maxX; cx += Math.max(1, Math.floor((plate.maxX - plate.minX) / 4))) {\n        if (cx > 0 && cx < fieldWidth - 1 && cy > 0 && cy < fieldHeight - 1) {\n          const eLeft = fields.elevation[cy * fieldWidth + (cx - 1)];\n          const eRight = fields.elevation[cy * fieldWidth + (cx + 1)];\n          const eUp = fields.elevation[(cy - 1) * fieldWidth + cx];\n          const eDown = fields.elevation[(cy + 1) * fieldWidth + cx];\n\n          gradX += (eRight - eLeft) / 2;\n          gradY += (eDown - eUp) / 2;\n          sampleCount++;\n        }\n      }\n    }\n\n    if (sampleCount > 0) {\n      gradX /= sampleCount;\n      gradY /= sampleCount;\n      const grad = Math.sqrt(gradX * gradX + gradY * gradY);\n      if (grad > 0.01) {\n        plate.velocityX = -(gradX / grad) * 0.3;\n        plate.velocityY = -(gradY / grad) * 0.3;\n      }\n    }\n  }\n}\n\n\n```\n\n```\nimport { PARTICLE_TYPES, PARTICLE_PROPERTIES, THERMAL_PROPERTIES } from '../../utils/Constants.js';\nimport { FieldGrid } from '../fields/FieldGrid.js';\n\nexport function fieldsToPlates(fields, plateResolution = 32) {\n  const fieldWidth = fields.width;\n  const fieldHeight = fields.height;\n\n  const platesX = Math.max(2, Math.floor(fieldWidth / plateResolution));\n  const platesY = Math.max(2, Math.floor(fieldHeight / plateResolution));\n\n  const plates = [];\n  const plateIdField = new Uint16Array(fieldWidth * fieldHeight);\n  const plateAgeField = new Float32Array(fieldWidth * fieldHeight);\n\n  for (let py = 0; py < platesY; py++) {\n    for (let px = 0; px < platesX; px++) {\n      const plateId = py * platesX + px;\n      const startCx = Math.floor((px / platesX) * fieldWidth);\n      const endCx = Math.floor(((px + 1) / platesX) * fieldWidth);\n      const startCy = Math.floor((py / platesY) * fieldHeight);\n      const endCy = Math.floor(((py + 1) / platesY) * fieldHeight);\n\n      let graniteCount = 0, basaltCount = 0, sandCount = 0;\n      let densitySum = 0, cellCount = 0;\n\n      for (let cy = startCy; cy < endCy; cy++) {\n        for (let cx = startCx; cx < endCx; cx++) {\n          const idx = cy * fieldWidth + cx;\n          cellCount++;\n          graniteCount += fields.material.granite[idx] || 0;\n          basaltCount += fields.material.basalt[idx] || 0;\n          sandCount += fields.material.sand[idx] || 0;\n          densitySum += (fields.material.granite[idx] || 0) * 2.7 +\n                        (fields.material.basalt[idx] || 0) * 3.0 +\n                        (fields.material.sand[idx] || 0) * 1.5;\n        }\n      }\n\n      const avgDensity = densitySum / Math.max(1, cellCount);\n      const isOceanic = avgDensity > 2.8 || basaltCount > graniteCount;\n      const plateType = isOceanic ? 'oceanic' : 'continental';\n\n      const plate = {\n        id: plateId,\n        type: plateType,\n        density: avgDensity,\n        centerX: (startCx + endCx) / 2,\n        centerY: (startCy + endCy) / 2,\n        minX: startCx,\n        maxX: endCx,\n        minY: startCy,\n        maxY: endCy,\n        // Random initial velocity (will be computed from field slopes)\n        velocityX: (Math.random() - 0.5) * 0.2,\n        velocityY: (Math.random() - 0.5) * 0.2,\n        // Material composition fractions\n        composition: {\n          granite: graniteCount / Math.max(1, cellCount),\n          basalt: basaltCount / Math.max(1, cellCount),\n          sand: sandCount / Math.max(1, cellCount)\n        }\n      };\n\n      plates.push(plate);\n\n      for (let cy = startCy; cy < endCy; cy++){\n        for (let cx = startCx; cx < endCx; cx++){\n          const idx = cy * fieldWidth + cx;\n          plateIdField[idx] = plateId;\n          plateAgeField[idx] = Math.random() * 200;\n        }\n      }\n    }\n  }\n\n  // Infer plate velocities from field elevation gradients\n  computePlateVelocitiesFromFields(plates, fields, plateIdField);\n\n  return {\n    plates,\n    plateIdField,\n    plateAgeField,\n    numPlatesX: platesX,\n    numPlatesY: platesY,\n    cellSize: plateResolution,\n    width: fieldWidth,\n    height: fieldHeight\n  };\n}\n\n/**\n * Infer coarse plate velocities from field elevation gradients.\n */\nfunction computePlateVelocitiesFromFields(plates, fields, plateIdField) {\n  const fieldWidth = fields.width;\n  const fieldHeight = fields.height;\n\n  for (const plate of plates) {\n    let gradX = 0, gradY = 0;\n    let sampleCount = 0;\n\n    for (let cy = plate.minY; cy < plate.maxY; cy += Math.max(1, Math.floor((plate.maxY - plate.minY) / 4))){\n      for (let cx = plate.minX; cx < plate.maxX; cx += Math.max(1, Math.floor((plate.maxX - plate.minX) / 4))){\n        if (cx > 0 && cx < fieldWidth - 1 && cy > 0 && cy < fieldHeight - 1){\n          const eLeft = fields.elevation[cy * fieldWidth + (cx - 1)];\n          const eRight = fields.elevation[cy * fieldWidth + (cx + 1)];\n          const eUp = fields.elevation[(cy - 1) * fieldWidth + cx];\n          const eDown = fields.elevation[(cy + 1) * fieldWidth + cx];\n\n          gradX += (eRight - eLeft) / 2;\n          gradY += (eDown - eUp) / 2;\n          sampleCount++;\n        }\n      }\n    }\n\n    if (sampleCount > 0){\n      gradX /= sampleCount;\n      gradY /= sampleCount;\n      const grad = Math.sqrt(gradX * gradX + gradY * gradY);\n      if (grad > 0.01){\n        plate.velocityX = -(gradX / grad) * 0.3;\n        plate.velocityY = -(gradY / grad) * 0.3;\n      }\n    }\n  }\n}\n\n\n```\n\n```\nimport { PARTICLE_TYPES, PARTICLE_PROPERTIES, THERMAL_PROPERTIES } from '../../utils/Constants.js';\nimport { FieldGrid } from '../fields/FieldGrid.js';\n\nexport function fieldsToPlates(fields, plateResolution = 32) {\n  const fieldWidth = fields.width;\n  const fieldHeight = fields.height;\n\n  const platesX = Math.max(2, Math.floor(fieldWidth / plateResolution));\n  const platesY = Math.max(2, Math.floor(fieldHeight / plateResolution));\n\n  const plates = [];\n  const plateIdField = new Uint16Array(fieldWidth * fieldHeight);\n  const plateAgeField = new Float32Array(fieldWidth * fieldHeight);\n\n  for (let py = 0; py < platesY; py++){\n    for (let px = 0; px < platesX; px++){\n      const plateId = py * platesX + px;\n      const startCx = Math.floor((px / platesX) * fieldWidth);\n      const endCx = Math.floor(((px + 1) / platesX) * fieldWidth);\n      const startCy = Math.floor((py / platesY) * fieldHeight);\n      const endCy = Math.floor(((py + 1) / platesY) * fieldHeight);\n\n      let graniteCount = 0, basaltCount = 0, sandCount = 0;\n      let densitySum = 0, cellCount = 0;\n\n      for (let cy = startCy; cy < endCy; cy++){\n        for (let cx = startCx; cx < endCx; cx++){\n          const idx = cy * fieldWidth + cx;\n          cellCount++;\n          graniteCount += fields.material.granite[idx] || 0;\n          basaltCount += fields.material.basalt[idx] || 0;\n          sandCount += fields.material.sand[idx] || 0;\n          densitySum += (fields.material.granite[idx] || 0) * 2.7 +\n                        (fields.material.basalt[idx] || 0) * 3.0 +\n                        (fields.material.sand[idx] || 0) * 1.5;\n        }\n      }\n\n      const avgDensity = densitySum / Math.max(1, cellCount);\n      const isOceanic = avgDensity > 2.8 || basaltCount > graniteCount;\n      const plateType = isOceanic ? 'oceanic' : 'continental';\n\n      const plate = {\n        id: plateId,\n        type: plateType,\n        density: avgDensity,\n        centerX: (startCx + endCx) / 2,\n        centerY: (startCy + endCy) / 2,\n        minX: startCx,\n        maxX: endCx,\n        minY: startCy,\n        maxY: endCy,\n        // Random initial velocity (will be computed from field slopes)\n        velocityX: (Math.random() - 0.5) * 0.2,\n        velocityY: (Math.random() - 0.5) * 0.2,\n        // Material composition fractions\n        composition: {\n          granite: graniteCount / Math.max(1, cellCount),\n          basalt: basaltCount / Math.max(1, cellCount),\n          sand: sandCount / Math.max(1, cellCount)\n        }\n      };\n\n      plates.push(plate);\n\n      for (let cy = startCy; cy < endCy; cy++){\n        for (let cx = startCx; cx < endCx; cx++){\n          const idx = cy * fieldWidth + cx;\n          plateIdField[idx] = plateId;\n          plateAgeField[idx] = Math.random() * 200;\n        }\n      }\n    }\n  }\n\n  // Infer plate velocities from field elevation gradients\n  computePlateVelocitiesFromFields(plates, fields, plateIdField);\n\n  return {\n    plates,\n    plateIdField,\n    plateAgeField,\n    numPlatesX: platesX,\n    numPlatesY: platesY,\n    cellSize: plateResolution,\n    width: fieldWidth,\n    height: fieldHeight\n  };\n}\n\n/**\n * Infer coarse plate velocities from field elevation gradients.\n */\nfunction computePlateVelocitiesFromFields(plates, fields, plateIdField) {\n  const fieldWidth = fields.width;\n  const fieldHeight = fields.height;\n\n  for (const plate of plates) {\n    let gradX = 0, gradY = 0;\n    let sampleCount = 0;\n\n    for (let cy = plate.minY; cy < plate.maxY; cy += Math.max(1, Math.floor((plate.maxY - plate.minY) / 4))){\n      for (let cx = plate.minX; cx < plate.maxX; cx += Math.max(1, Math.floor((plate.maxX - plate.minX) / 4))){\n        if (cx > 0 && cx < fieldWidth - 1 && cy > 0 && cy < fieldHeight - 1){\n          const eLeft = fields.elevation[cy * fieldWidth + (cx - 1)];\n          const eRight = fields.elevation[cy * fieldWidth + (cx + 1)];\n          const eUp = fields.elevation[(cy - 1) * fieldWidth + cx];\n          const eDown = fields.elevation[(cy + 1) * fieldWidth + cx];\n\n          gradX += (eRight - eLeft) / 2;\n          gradY += (eDown - eUp) / 2;\n          sampleCount++;\n        }\n      }\n    }\n\n    if (sampleCount > 0){\n      gradX /= sampleCount;\n      gradY /= sampleCount;\n      const grad = Math.sqrt(gradX * gradX + gradY * gradY);\n      if (grad > 0.01){\n        plate.velocityX = -(gradX / grad) * 0.3;\n        plate.velocityY = -(gradY / grad) * 0.3;\n      }\n    }\n  }\n}\n\n\n```\n\nHere is the updated code for src/core/state/serializers/FieldsToPlates.js:\n\n```\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"
+/**
+ * fieldsToPlates
+ * Convert coarse field representation into a simple plate system abstraction.
+ *
+ * Inputs:
+ *  - fields: { width, height, elevation, material: { sand, soil, granite, basalt }, ... }
+ *  - plateResolution: approximate plate cell size (in field cells)
+ *
+ * Returns:
+ *  {
+ *    plates: [ { id, type, density, centerX, centerY, minX, maxX, minY, maxY, velocityX, velocityY, composition } ],
+ *    plateIdField: Uint16Array(field.width * field.height),
+ *    plateAgeField: Float32Array(field.width * field.height),
+ *    numPlatesX, numPlatesY, cellSize: plateResolution, width: field.width, height: field.height
+ *  }
+ */
+export function fieldsToPlates(fields, plateResolution = 32) {
+  if (!fields || !fields.width || !fields.height) {
+    throw new Error('fieldsToPlates: invalid fields input');
+  }
+
+  const fieldWidth = fields.width;
+  const fieldHeight = fields.height;
+
+  const platesX = Math.max(2, Math.floor(fieldWidth / plateResolution));
+  const platesY = Math.max(2, Math.floor(fieldHeight / plateResolution));
+
+  const plates = [];
+  const plateIdField = new Uint16Array(fieldWidth * fieldHeight);
+  const plateAgeField = new Float32Array(fieldWidth * fieldHeight);
+
+  const mat = fields.material || {};
+  const sandArr = mat.sand || new Float32Array(fieldWidth * fieldHeight);
+  const soilArr = mat.soil || new Float32Array(fieldWidth * fieldHeight);
+  const graniteArr = mat.granite || new Float32Array(fieldWidth * fieldHeight);
+  const basaltArr = mat.basalt || new Float32Array(fieldWidth * fieldHeight);
+
+  let plateIdCounter = 0;
+  for (let py = 0; py < platesY; py++) {
+    for (let px = 0; px < platesX; px++) {
+      const startCx = Math.floor((px / platesX) * fieldWidth);
+      const endCx = Math.floor(((px + 1) / platesX) * fieldWidth);
+      const startCy = Math.floor((py / platesY) * fieldHeight);
+      const endCy = Math.floor(((py + 1) / platesY) * fieldHeight);
+
+      let graniteCount = 0, basaltCount = 0, sandCount = 0;
+      let densitySum = 0, cellCount = 0;
+
+      for (let cy = startCy; cy < endCy; cy++) {
+        for (let cx = startCx; cx < endCx; cx++) {
+          const idx = cy * fieldWidth + cx;
+          cellCount++;
+          graniteCount += graniteArr[idx] || 0;
+          basaltCount += basaltArr[idx] || 0;
+          sandCount += sandArr[idx] || 0;
+          // approximate density proxy from composition
+          densitySum += (graniteArr[idx] || 0) * 2.7 + (basaltArr[idx] || 0) * 3.0 + (sandArr[idx] || 0) * 1.5;
+        }
+      }
+
+      const avgDensity = densitySum / Math.max(1, cellCount);
+      const isOceanic = avgDensity > 2.8 || basaltCount > graniteCount;
+      const plateType = isOceanic ? 'oceanic' : 'continental';
+
+      const plate = {
+        id: plateIdCounter,
+        type: plateType,
+        density: avgDensity,
+        centerX: (startCx + endCx) / 2,
+        centerY: (startCy + endCy) / 2,
+        minX: startCx,
+        maxX: Math.max(startCx + 1, endCx),
+        minY: startCy,
+        maxY: Math.max(startCy + 1, endCy),
+        // initial small random velocity; will be inferred later
+        velocityX: (Math.random() - 0.5) * 0.2,
+        velocityY: (Math.random() - 0.5) * 0.2,
+        composition: {
+          granite: graniteCount / Math.max(1, cellCount),
+          basalt: basaltCount / Math.max(1, cellCount),
+          sand: sandCount / Math.max(1, cellCount)
+        }
+      };
+
+      plates.push(plate);
+
+      for (let cy = startCy; cy < endCy; cy++) {
+        for (let cx = startCx; cx < endCx; cx++) {
+          const idx = cy * fieldWidth + cx;
+          plateIdField[idx] = plateIdCounter;
+          plateAgeField[idx] = Math.random() * 200;
+        }
+      }
+
+      plateIdCounter++;
+    }
+  }
+
+  // Infer coarse plate velocities from elevation gradients
+  computePlateVelocitiesFromFields(plates, fields, plateIdField);
+
+  return {
+    plates,
+    plateIdField,
+    plateAgeField,
+    numPlatesX: platesX,
+    numPlatesY: platesY,
+    cellSize: plateResolution,
+    width: fieldWidth,
+    height: fieldHeight
+  };
+}
+
+/**
+ * computePlateVelocitiesFromFields
+ * Estimate a simple velocity direction for each plate from elevation gradients inside plate bounds.
+ */
+function computePlateVelocitiesFromFields(plates, fields, plateIdField) {
+  const fieldWidth = fields.width;
+  const fieldHeight = fields.height;
+  const elev = fields.elevation || new Float32Array(fieldWidth * fieldHeight);
+
+  for (const plate of plates) {
+    let gradX = 0, gradY = 0;
+    let sampleCount = 0;
+
+    const stepX = Math.max(1, Math.floor((plate.maxX - plate.minX) / 4));
+    const stepY = Math.max(1, Math.floor((plate.maxY - plate.minY) / 4));
+
+    for (let cy = plate.minY; cy < plate.maxY; cy += stepY) {
+      for (let cx = plate.minX; cx < plate.maxX; cx += stepX) {
+        if (cx > 0 && cx < fieldWidth - 1 && cy > 0 && cy < fieldHeight - 1) {
+          const eLeft = elev[cy * fieldWidth + (cx - 1)];
+          const eRight = elev[cy * fieldWidth + (cx + 1)];
+          const eUp = elev[(cy - 1) * fieldWidth + cx];
+          const eDown = elev[(cy + 1) * fieldWidth + cx];
+
+          gradX += (eRight - eLeft) / 2;
+          gradY += (eDown - eUp) / 2;
+          sampleCount++;
+        }
+      }
+    }
+
+    if (sampleCount > 0) {
+      gradX /= sampleCount;
+      gradY /= sampleCount;
+      const mag = Math.hypot(gradX, gradY);
+      if (mag > 1e-4) {
+        // Plates tend to move from high to low elevation in this heuristic
+        plate.velocityX = -(gradX / mag) * 0.3;
+        plate.velocityY = -(gradY / mag) * 0.3;
+      }
+    }
+  }
+}
