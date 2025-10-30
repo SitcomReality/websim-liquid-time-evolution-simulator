@@ -18,7 +18,7 @@ export class Controls {
     
     setupEventListeners() {
         // Mouse/touch drawing
-        this.canvas.canvas.addEventListener('mousedown', (e) => this.startDrawing(e));
+        this.canvas.canvas.addEventListener('mousemove', (e) => this.startDrawing(e));
         this.canvas.canvas.addEventListener('mousemove', (e) => this.draw(e));
         this.canvas.canvas.addEventListener('mouseup', () => this.stopDrawing());
         this.canvas.canvas.addEventListener('mouseleave', () => this.stopDrawing());
@@ -38,7 +38,10 @@ export class Controls {
         const timeScaleSlider = document.getElementById('timeScale');
         timeScaleSlider.addEventListener('input', (e) => {
             const value = parseFloat(e.target.value);
-            const scale = Math.pow(2, value / 10);
+            // Original: const scale = Math.pow(2, value / 10);
+            // New logic: 100 maps to 2^24 (approx 16.7 million x) to cover Tectonic Scale
+            const exponent = value * 0.24; 
+            const scale = Math.pow(2, exponent);
             this.simulation.setTimeScale(scale);
             document.getElementById('timeScaleValue').textContent = `${scale.toFixed(1)}x`;
             
@@ -183,29 +186,28 @@ export class Controls {
         systemsInfo.className = 'systems-info';
         container.appendChild(systemsInfo);
 
-        // Draw tier markers
-        this.drawTierMarkers(canvas);
+        // Draw initial state (markers + indicator)
+        this.redrawTierMarkers();
 
         // Update systems info periodically
         setInterval(() => this.updateSystemsInfo(), 500);
     }
 
-    drawTierMarkers(canvas) {
-        const ctx = canvas.getContext('2d');
-        const width = canvas.width;
-        const height = canvas.height;
+    _drawStaticMarkers(ctx, width, height) {
+        // Constants used for log scaling in updateSliderIndicator
+        const LOG_MIN = Math.log2(1);
+        const LOG_MAX = Math.log2(10000000); 
 
-        // Clear
+        // Clear and draw background
         ctx.fillStyle = 'rgba(0,0,0,0.1)';
         ctx.fillRect(0, 0, width, height);
 
-        // Tier boundaries (log scale)
+        // Tier boundaries (using speeds based on SimulationTiers.js)
         const tiers = [
-            { name: 'T1', scale: 100, x: 0.33 },
-            { name: 'T2', scale: 100000, x: 0.66 },
-            { name: 'T3', scale: 1000000, x: 1.0 }
+            { name: 'T1', scale: 100 }, 
+            { name: 'T2', scale: 100000 }
         ];
-
+        
         ctx.strokeStyle = '#666';
         ctx.lineWidth = 1;
         ctx.fillStyle = '#999';
@@ -213,25 +215,56 @@ export class Controls {
         ctx.textAlign = 'center';
 
         for (const tier of tiers) {
-            const x = tier.x * width;
+            const logScale = Math.log2(tier.scale);
+            const normalized = (logScale - LOG_MIN) / (LOG_MAX - LOG_MIN);
+            const x = Math.max(0, Math.min(width, normalized * width));
+
             ctx.beginPath();
             ctx.moveTo(x, 0);
             ctx.lineTo(x, height - 8);
             ctx.stroke();
             ctx.fillText(tier.name, x, height - 2);
         }
+        
+        // Mark T3 start (1,000,000x)
+        const t3StartLog = Math.log2(1000000);
+        const t3StartNormalized = (t3StartLog - LOG_MIN) / (LOG_MAX - LOG_MIN);
+        const x3 = Math.max(0, Math.min(width, t3StartNormalized * width));
+        
+        ctx.strokeStyle = '#0f62fe';
+        ctx.fillStyle = '#0f62fe';
+        ctx.beginPath();
+        ctx.moveTo(x3, 0);
+        ctx.lineTo(x3, height - 8);
+        ctx.stroke();
+        ctx.fillText('T3', x3, height - 2);
+    }
 
-        // Current position indicator (will be updated dynamically)
+    redrawTierMarkers() {
+        const canvas = document.getElementById('tierMarkersCanvas');
+        if (!canvas) return;
+
+        const ctx = canvas.getContext('2d');
+        this._drawStaticMarkers(ctx, canvas.width, canvas.height);
         this.updateSliderIndicator(canvas);
     }
 
+    drawTierMarkers(canvas) {
+        // Deprecated: now handled by redrawTierMarkers / _drawStaticMarkers
+    }
+
     updateSliderIndicator(canvas) {
-        const slider = document.getElementById('timeScale');
-        const scale = Math.pow(2, parseInt(slider.value) / 10);
+        // Ensure the scale is consistent with the calculation used in the input handler
+        const scale = this.simulation.timeScale;
         
         const ctx = canvas.getContext('2d');
         const width = canvas.width;
         const height = canvas.height;
+
+        // --- RENDER STATIC BACKGROUND AND MARKERS FIRST ---
+        // This ensures the previous indicator is cleared every time
+        this._drawStaticMarkers(ctx, width, height);
+        // --- END STATIC DRAWING ---
 
         // Normalize scale to 0..1 (log scale)
         const logMin = Math.log2(1);
