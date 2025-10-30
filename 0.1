@@ -1,0 +1,207 @@
+// src/core/backends/tier2/ErosionCalculator.js
+export class ErosionCalculator {
+  constructor(fields) {
+    this.fields = fields;
+  }
+
+  update(deltaTime) {
+    const erosionAmount = new Float32Array(this.fields.materialField.size);
+
+    for (let y = 0; y < this.fields.materialField.height; y++) {
+      for (let x = 0; x < this.fields.materialField.width; x++) {
+        const idx = this.fields.materialField.getIndex(x, y);
+        const elevation = this.fields.elevationField.getElevation(x, y);
+        const slope = this.fields.elevationField.getSlope(x, y);
+        const precipitation = this.fields.climateField.getPrecipitation(x, y);
+        const vegetation = this.fields.materialField.getMaterialRatio(x, y, 'vegetation');
+
+        let erosionRate = 0;
+        if (slope.mag > 0.5) {
+          erosionRate = 0.1; // steep slopes erode faster
+        } else if (slope.mag > 0.1) {
+          erosionRate = 0.05; // gentle slopes erode slower
+        }
+
+        // Soft materials erode faster
+        const materialErosionRate = {
+          granite: 0.1,
+          basalt: 0.15,
+          soil: 0.5,
+          sand: 0.4,
+        };
+        erosionRate *= materialErosionRate[this.fields.materialField.getDominantType(x, y)];
+
+        // Precipitation multiplies erosion rate
+        erosionRate *= precipitation / 100;
+
+        // Vegetation reduces erosion
+        erosionRate *= (1 - vegetation * 0.5);
+
+        // Cap maximum erosion per timestep
+        const maxErosion = 0.01;
+        erosionAmount[idx] = Math.min(maxErosion, erosionRate * deltaTime);
+      }
+    }
+
+    return erosionAmount;
+  }
+}
+
+// src/core/backends/tier2/MaterialFlowSimulator.js
+export class MaterialFlowSimulator {
+  constructor(fields) {
+    this.fields = fields;
+  }
+
+  update(deltaTime, erosionAmount) {
+    const sedimentDepth = this.fields.elevationField.sedimentDepth;
+    const flowDirX = this.fields.elevationField.flowDirX;
+    const flowDirY = this.fields.elevationField.flowDirY;
+
+    for (let y = 0; y < this.fields.materialField.height; y++) {
+      for (let x = 0; x < this.fields.materialField.width; x++) {
+        const idx = this.fields.materialField.getIndex(x, y);
+        const erosion = erosionAmount[idx];
+        const flowX = flowDirX[idx];
+        const flowY = flowDirY[idx];
+
+        // Move eroded material downslope
+        let suspendedLoad = erosion;
+        let currentX = x;
+        let currentY = y;
+
+        while (suspendedLoad > 0) {
+          const nextX = currentX + flowX;
+          const nextY = currentY + flowY;
+
+          if (nextX < 0 || nextX >= this.fields.materialField.width || nextY < 0 || nextY >= this.fields.materialField.height) {
+            break;
+          }
+
+          const nextIdx = this.fields.materialField.getIndex(nextX, nextY);
+          const nextSediment = sedimentDepth[nextIdx];
+
+          // Deposit material when slope drops below angle of repose
+          if (Math.atan2(flowY, flowX) < Math.PI / 4) {
+            const depositAmount = Math.min(suspendedLoad, 0.1);
+            sedimentDepth[nextIdx] += depositAmount;
+            suspendedLoad -= depositAmount;
+          }
+
+          currentX = nextX;
+          currentY = nextY;
+        }
+      }
+    }
+
+    return sedimentDepth;
+  }
+}
+
+// src/core/backends/tier2/LandformEvolver.js
+export class LandformEvolver {
+  constructor(fields) {
+    this.fields = fields;
+  }
+
+  update(deltaTime) {
+    const elevation = this.fields.elevationField.baseElevation;
+    const flowConcentration = new Float32Array(this.fields.materialField.size);
+
+    for (let y = 0; y < this.fields.materialField.height; y++) {
+      for (let x = 0; x < this.fields.materialField.width; x++) {
+        const idx = this.fields.materialField.getIndex(x, y);
+        const flowX = this.fields.elevationField.flowDirX[idx];
+        const flowY = this.fields.elevationField.flowDirY[idx];
+
+        // Track flow concentration
+        let concentration = 0;
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            if (dx === 0 && dy === 0) continue;
+            const nx = x + dx;
+            const ny = y + dy;
+            if (nx < 0 || nx >= this.fields.materialField.width || ny < 0 || ny >= this.fields.materialField.height) continue;
+            const nIdx = this.fields.materialField.getIndex(nx, ny);
+            if (this.fields.elevationField.flowDirX[nIdx] === flowX && this.fields.elevationField.flowDirY[nIdx] === flowY) {
+              concentration++;
+            }
+          }
+        }
+
+        flowConcentration[idx] = concentration;
+      }
+    }
+
+    // Valley deepening
+    for (let y = 0; y < this.fields.materialField.height; y++) {
+      for (let x = 0; x < this.fields.materialField.width; x++) {
+        const idx = this.fields.materialField.getIndex(x, y);
+        const concentration = flowConcentration[idx];
+        if (concentration > 10) {
+          elevation[idx] -= 0.01;
+        }
+      }
+    }
+
+    // Peak reduction
+    for (let y = 0; y < this.fields.materialField.height; y++) {
+      for (let x = 0; x < this.fields.materialField.width; x++) {
+        const idx = this.fields.materialField.getIndex(x, y);
+        const heightAboveNeighbors = elevation[idx] - (elevation[this.fields.materialField.getIndex(x - 1, y)] + elevation[this.fields.materialField.getIndex(x + 1, y)] + elevation[this.fields.materialField.getIndex(x, y - 1)] + elevation[this.fields.materialField.getIndex(x, y + 1)]) / 4;
+        if (heightAboveNeighbors > 10) {
+          elevation[idx] -= 0.01;
+        }
+      }
+    }
+
+    // Isostatic response
+    for (let y = 0; y < this.fields.materialField.height; y++) {
+      for (let x = 0; x < this.fields.materialField.width; x++) {
+        const idx = this.fields.materialField.getIndex(x, y);
+        const sedimentDepth = this.fields.elevationField.sedimentDepth[idx];
+        if (sedimentDepth > 10) {
+          elevation[idx] -= sedimentDepth * 0.01;
+        }
+      }
+    }
+
+    return elevation;
+  }
+}
+
+// src/core/backends/tier2/ViscousRockFlow.js
+export class ViscousRockFlow {
+  constructor(fields) {
+    this.fields = fields;
+  }
+
+  update(deltaTime) {
+    const elevation = this.fields.elevationField.baseElevation;
+    const temperature = this.fields.climateField.temperature;
+    const materialViscosity = {
+      granite: 1000000,
+      basalt: 500000,
+      soil: 10000,
+      sand: 5000,
+    };
+
+    for (let y = 0; y < this.fields.materialField.height; y++) {
+      for (let x = 0; x < this.fields.materialField.width; x++) {
+        const idx = this.fields.materialField.getIndex(x, y);
+        const viscosity = materialViscosity[this.fields.materialField.getDominantType(x, y)];
+        const pressure = this.fields.elevationField.baseElevation[idx] * 1000; // assume 1000 kg/m^3 density
+
+        // Calculate flow velocity
+        const flowVelocityX = -pressure * deltaTime / viscosity;
+        const flowVelocityY = -pressure * deltaTime / viscosity;
+
+        // Update elevation
+        elevation[idx] += flowVelocityX * deltaTime;
+        elevation[idx] += flowVelocityY * deltaTime;
+      }
+    }
+
+    return elevation;
+  }
+}

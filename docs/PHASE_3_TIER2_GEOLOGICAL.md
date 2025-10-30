@@ -19,3 +19,19 @@ Notes:
 - Use a configurable cell resolution (e.g., 8–32 pixels per cell).
 - Focus on plausible results rather than complete physical accuracy.
 
+#### Step 3.3: Create Geological Processes
+
+##### File: `src/core/backends/tier2/ErosionCalculator.js`
+
+Calculates erosion rates per cell based on slope, material, and climate.
+
+**Input:**
+- Elevation field (for slope calculation)
+- Material field (composition determines erodibility)
+- Climate field (precipitation drives erosion)
+- Cell resolution and timestep
+
+**Output:**
+- Erosion mask (amount of material removed per cell)
+
+**Algorithm: Simplified RUSLE (Revised Universal Soil Loss Equation)**
