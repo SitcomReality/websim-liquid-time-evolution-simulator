@@ -1,1 +1,318 @@
-```\n/**\n * RenderBridge\n * Maintains particle rendering across all simulation tiers.\n * \n * For Tier 1: Uses actual particles for both simulation and rendering\n * For Tier 2/3: Uses fields for simulation, but maintains particle representation for display\n * \n * This ensures visual continuity during tier transitions and avoids jarring visual changes.\n */\nexport class RenderBridge {\n  constructor(world, canvas, config = {}) {\n    this.world = world;\n    this.canvas = canvas;\n    \n    // Configuration\n    this.updateFrequency = config.updateFrequency || 10; // Frames between particle updates\n    this.interpolationSmoothing = config.interpolationSmoothing !== false;\n    this.maxUpdateCellsPerFrame = config.maxUpdateCellsPerFrame || 1000;\n    this.visibilityMargin = config.visibilityMargin || 50; // Pixels beyond viewport\n    \n    // State tracking\n    this.lastUpdateFrame = 0;\n    this.visibleRegion = { x: 0, y: 0, width: 0, height: 0 };\n    this.lastFieldHash = 0;\n    this.isTier2Or3 = false;\n    \n    // Interpolation buffers for smooth transitions\n    this.particleBuffer = new Uint8Array(world.size);\n    this.interpolationWeights = new Float32Array(world.size);\n    \n    // Performance tracking\n    this.stats = {\n      cellsUpdated: 0,\n      particlesGenerated: 0,\n      interpolationFrames: 0\n    };\n  }\n\n  /**\n   * Main update call - should be called each frame\n   * Determines if particle update is needed based on tier and view changes\n   */\n  update(fields, currentTier) {\n    this.isTier2Or3 = currentTier !== 'HUMAN_SCALE';\n    \n    // Only update particles for Tier 2/3 where we're using field simulation\n    if (!this.isTier2Or3) return;\n    \n    // Check if enough frames have passed\n    if (this.world.updateCount - this.lastUpdateFrame < this.updateFrequency) return;\n    \n    // Check if visible region has changed significantly\n    const newRegion = this.getVisibleRegion();\n    if (!this.regionsEqual(newRegion, this.visibleRegion)) {\n      this.visibleRegion = newRegion;\n      this.updateParticlesFromFields(fields, this.visibleRegion);\n      this.lastUpdateFrame = this.world.updateCount;\n    }\n    \n    // Check if fields have changed (using simple hash for now)\n    const fieldHash = this.hashFields(fields);\n    if (fieldHash !== this.lastFieldHash) {\n      this.updateParticlesFromFields(fields, this.visibleRegion);\n      this.lastFieldHash = fieldHash;\n      this.lastUpdateFrame = this.world.updateCount;\n    }\n  }\n\n  /**\n   * Synchronizes display particles to current field state\n   * Only updates particles within the visible region for performance\n   */\n  updateParticlesFromFields(fields, region) {\n    const startX = Math.max(0, Math.floor(region.x / fields.cellSize));\n    const startY = Math.max(0, Math.floor(region.y / fields.cellSize));\n    const endX = Math.min(fields.width, Math.ceil((region.x + region.width) / fields.cellSize));\n    const endY = Math.min(fields.height, Math.ceil((region.y + region.height) / fields.cellSize));\n    \n    this.stats.cellsUpdated = 0;\n    \n    // Process cells in batches to avoid blocking\n    const cellsToProcess = (endX - startX) * (endY - startY);\n    const batchSize = Math.min(this.maxUpdateCellsPerFrame, cellsToProcess);\n    \n    for (let cy = startY; cy < endY && this.stats.cellsUpdated < batchSize; cy++) {\n      for (let cx = startX; cx < endX && this.stats.cellsUpdated < batchSize; cx++) {\n        const fieldIdx = cy * fields.width + cx;\n        \n        // Skip if this cell hasn't changed significantly\n        if (!this.hasFieldCellChanged(fields, cx, cy, fieldIdx)) continue;\n        \n        // Convert field cell to particles\n        this.convertFieldCellToParticles(fields, cx, cy, fieldIdx);\n        this.stats.cellsUpdated++;\n      }\n    }\n    \n    this.stats.particlesGenerated += this.stats.cellsUpdated * (fields.cellSize * fields.cellSize);\n  }\n\n  /**\n   * Convert a single field cell to particle representation\n   * Uses probabilistic placement based on field values\n   */\n  convertFieldCellToParticles(fields, cx, cy, fieldIdx) {\n    const cellSize = fields.cellSize;\n    const x0 = cx * cellSize;\n    const y0 = cy * cellSize;\n    const x1 = Math.min(this.world.width, x0 + cellSize);\n    const y1 = Math.min(this.world.height, y0 + cellSize);\n    \n    // Get field values\n    const elevation = fields.elevation[fieldIdx];\n    const temperature = fields.climate.temperature[fieldIdx];\n    const materialRatios = {\n      sand: fields.material.sand[fieldIdx],\n      soil: fields.material.soil[fieldIdx],\n      granite: fields.material.granite[fieldIdx],\n      basalt: fields.material.basalt[fieldIdx]\n    };\n    \n    // Convert normalized elevation to world coordinates\n    const surfaceY = Math.floor(this.world.height * (1 - Math.min(1, elevation)));\n    \n    // Determine dominant material type\n    const dominantType = this.getDominantParticleType(materialRatios);\n    \n    // Generate particles based on field data\n    for (let y = y0; y < y1; y++) {\n      for (let x = x0; x < x1; x++) {\n        const worldIdx = y * this.world.width + x;\n        \n        // Set temperature\n        this.world.temperature[worldIdx] = temperature;\n        \n        // Determine particle type based on elevation and material\n        if (y >= surfaceY) {\n          // Below surface: solid material\n          // Use probability based on material ratios\n          const rand = Math.random();\n          let particleType = 0; // EMPTY default\n          \n          if (rand < materialRatios.basalt) {\n            particleType = 10; // BASALT\n          } else if (rand < materialRatios.basalt + materialRatios.granite) {\n            particleType = 3; // GRANITE\n          } else if (rand < materialRatios.basalt + materialRatios.granite + materialRatios.sand) {\n            particleType = 1; // SAND\n          } else {\n            particleType = 4; // SOIL\n          }\n          \n          this.world.particles[worldIdx] = particleType;\n        } else {\n          // Above surface: air or water based on precipitation\n          const waterProb = Math.min(0.3, fields.climate.precipitation[fieldIdx] / 3000);\n          this.world.particles[worldIdx] = Math.random() < waterProb ? 2 : 0; // WATER : EMPTY\n        }\n        \n        // Mark as updated for rendering\n        this.world.updated[worldIdx] = 1;\n      }\n    }\n  }\n\n  /**\n   * Get the visible region of the world based on canvas viewport\n   */\n  getVisibleRegion() {\n    const canvasRect = this.canvas.canvas.getBoundingClientRect();\n    const scaleX = this.world.width / canvasRect.width;\n    const scaleY = this.world.height / canvasRect.height;\n    \n    // Account for scroll position if canvas is in a scrollable container\n    const container = this.canvas.canvas.parentElement;\n    const scrollLeft = container ? container.scrollLeft : 0;\n    const scrollTop = container ? container.scrollTop : 0;\n    \n    return {\n      x: Math.max(0, scrollLeft * scaleX - this.visibilityMargin),\n      y: Math.max(0, scrollTop * scaleY - this.visibilityMargin),\n      width: Math.min(this.world.width, (canvasRect.width + this.visibilityMargin * 2) * scaleX),\n      height: Math.min(this.world.height, (canvasRect.height + this.visibilityMargin * 2) * scaleY)\n    };\n  }\n\n  /**\n   * Smooth visual updates using interpolation between field states\n   * Prevents jarring changes when backend updates slowly\n   */\n  interpolateChanges() {\n    if (!this.interpolationSmoothing) return;\n    \n    const interpolationFactor = 0.1; // Smoothing factor (0-1)\n    \n    // Interpolate between current particles and buffer\n    for (let i = 0; i < this.world.size; i++) {\n      const current = this.world.particles[i];\n      const target = this.particleBuffer[i];\n      \n      if (current !== target) {\n        // Weighted average for smooth transition\n        this.interpolationWeights[i] = current * (1 - interpolationFactor) + target * interpolationFactor;\n        \n        // Apply interpolation if weights are significantly different\n        if (Math.abs(this.interpolationWeights[i] - current) > 0.1) {\n          this.world.particles[i] = Math.round(this.interpolationWeights[i]);\n          this.stats.interpolationFrames++;\n        }\n      }\n    }\n  }\n\n  /**\n   * Check if a field cell has changed significantly\n   */\n  hasFieldCellChanged(fields, cx, cy, fieldIdx) {\n    // Simple threshold-based change detection\n    const elevation = fields.elevation[fieldIdx];\n    const prevElevation = this.lastFieldValues?.elevation?.[fieldIdx];\n    \n    if (prevElevation === undefined) return true;\n    \n    // Consider significant if elevation changed by more than 5% of world height\n    const threshold = 0.05;\n    return Math.abs(elevation - prevElevation) > threshold;\n  }\n\n  /**\n   * Determine dominant particle type from material ratios\n   */\n  getDominantParticleType(materialRatios) {\n    const { sand, soil, granite, basalt } = materialRatios;\n    const total = sand + soil + granite + basalt;\n    \n    if (total === 0) return 0; // EMPTY\n    \n    const normalized = {\n      sand: sand / total,\n      soil: soil / total,\n      granite: granite / total,\n      basalt: basalt / total\n    };\n    \n    // Return particle type with highest ratio\n    if (normalized.basalt > normalized.granite) return 10; // BASALT\n    if (normalized.granite > normalized.sand) return 3; // GRANITE\n    if (normalized.sand > normalized.soil) return 1; // SAND\n    return 4; // SOIL\n  }\n\n  /**\n   * Compare two regions for equality\n   */\n  regionsEqual(region1, region2) {\n    return Math.abs(region1.x - region2.x) < 1 &&\n           Math.abs(region1.y - region2.y) < 1 &&\n           Math.abs(region1.width - region2.width) < 1 &&\n           Math.abs(region1.height - region2.height) < 1;\n  }\n\n  /**\n   * Simple hash function for field state\n   */\n  hashFields(fields) {\n    let hash = 0;\n    const sampleRate = Math.max(1, Math.floor(fields.elevation.length / 100));\n    \n    for (let i = 0; i < fields.elevation.length; i += sampleRate) {\n      hash = ((hash << 5) - hash + Math.round(fields.elevation[i] * 1000)) & 0xffffffff;\n    }\n    \n    return hash;\n  }\n\n  /**\n   * Get rendering statistics\n   */\n  getStats() {\n    return {\n      ...this.stats,\n      visibleRegion: this.visibleRegion,\n      isInterpolating: this.interpolationSmoothing,\n      lastUpdateFrame: this.lastUpdateFrame\n    };\n  }\n\n  /**\n   * Reset statistics\n   */\n  resetStats() {\n    this.stats = {\n      cellsUpdated: 0,\n      particlesGenerated: 0,\n      interpolationFrames: 0\n    };\n  }\n\n  /**\n   * Cache field values for change detection\n   */\n  cacheFieldValues(fields) {\n    this.lastFieldValues = {\n      elevation: new Float32Array(fields.elevation),\n      temperature: new Float32Array(fields.climate.temperature),\n      precipitation: new Float32Array(fields.climate.precipitation)\n    };\n  }\n}\n```\n\nThe updated code for src/core/rendering/RenderBridge.js remains the same as provided in the plan. This class is designed to maintain particle rendering across different simulation tiers, ensuring visual continuity and avoiding jarring changes during tier transitions. The provided code includes methods for updating particles from field data, interpolating changes, and handling visible regions, among others.
+/**
+ * RenderBridge
+ * Maintains particle rendering across all simulation tiers.
+ *
+ * For Tier 1: Uses actual particles for both simulation and rendering
+ * For Tier 2/3: Uses fields for simulation, but maintains particle representation for display
+ *
+ * This ensures visual continuity during tier transitions and avoids jarring visual changes.
+ */
+export class RenderBridge {
+  constructor(world, canvas, config = {}) {
+    this.world = world;
+    this.canvas = canvas;
+
+    // Configuration
+    this.updateFrequency = config.updateFrequency || 10; // Frames between particle updates
+    this.interpolationSmoothing = config.interpolationSmoothing !== false;
+    this.maxUpdateCellsPerFrame = config.maxUpdateCellsPerFrame || 1000;
+    this.visibilityMargin = config.visibilityMargin || 50; // Pixels beyond viewport
+
+    // State tracking
+    this.lastUpdateFrame = 0;
+    this.visibleRegion = { x: 0, y: 0, width: 0, height: 0 };
+    this.lastFieldHash = 0;
+    this.isTier2Or3 = false;
+
+    // Interpolation buffers for smooth transitions
+    this.particleBuffer = new Uint8Array(world.size);
+    this.interpolationWeights = new Float32Array(world.size);
+
+    // Performance tracking
+    this.stats = {
+      cellsUpdated: 0,
+      particlesGenerated: 0,
+      interpolationFrames: 0
+    };
+
+    // Cache of last field values for change detection
+    this.lastFieldValues = null;
+  }
+
+  /**
+   * Main update call - should be called each frame
+   * Determines if particle update is needed based on tier and view changes
+   */
+  update(fields, currentTier) {
+    this.isTier2Or3 = currentTier && currentTier.key !== 'HUMAN_SCALE';
+
+    // Only update particles for Tier 2/3 where we're using field simulation
+    if (!this.isTier2Or3) return;
+
+    // Check if enough frames have passed
+    if (this.world.updateCount - this.lastUpdateFrame < this.updateFrequency) return;
+
+    // Check if visible region has changed significantly
+    const newRegion = this.getVisibleRegion();
+    if (!this.regionsEqual(newRegion, this.visibleRegion)) {
+      this.visibleRegion = newRegion;
+      this.updateParticlesFromFields(fields, this.visibleRegion);
+      this.lastUpdateFrame = this.world.updateCount;
+      this.cacheFieldValues(fields);
+      return;
+    }
+
+    // Check if fields have changed (using simple hash for now)
+    const fieldHash = this.hashFields(fields);
+    if (fieldHash !== this.lastFieldHash) {
+      this.updateParticlesFromFields(fields, this.visibleRegion);
+      this.lastFieldHash = fieldHash;
+      this.lastUpdateFrame = this.world.updateCount;
+      this.cacheFieldValues(fields);
+    }
+  }
+
+  /**
+   * Synchronizes display particles to current field state
+   * Only updates particles within the visible region for performance
+   */
+  updateParticlesFromFields(fields, region) {
+    const startX = Math.max(0, Math.floor(region.x / fields.cellSize));
+    const startY = Math.max(0, Math.floor(region.y / fields.cellSize));
+    const endX = Math.min(fields.width, Math.ceil((region.x + region.width) / fields.cellSize));
+    const endY = Math.min(fields.height, Math.ceil((region.y + region.height) / fields.cellSize));
+
+    this.stats.cellsUpdated = 0;
+
+    // Process cells in batches to avoid blocking
+    const cellsToProcess = (endX - startX) * (endY - startY);
+    const batchSize = Math.min(this.maxUpdateCellsPerFrame, cellsToProcess);
+
+    for (let cy = startY; cy < endY && this.stats.cellsUpdated < batchSize; cy++) {
+      for (let cx = startX; cx < endX && this.stats.cellsUpdated < batchSize; cx++) {
+        const fieldIdx = cy * fields.width + cx;
+
+        // Skip if this cell hasn't changed significantly
+        if (!this.hasFieldCellChanged(fields, cx, cy, fieldIdx)) continue;
+
+        // Convert field cell to particles
+        this.convertFieldCellToParticles(fields, cx, cy, fieldIdx);
+        this.stats.cellsUpdated++;
+      }
+    }
+
+    this.stats.particlesGenerated += this.stats.cellsUpdated * (fields.cellSize * fields.cellSize);
+  }
+
+  /**
+   * Convert a single field cell to particle representation
+   * Uses probabilistic placement based on field values
+   */
+  convertFieldCellToParticles(fields, cx, cy, fieldIdx) {
+    const cellSize = fields.cellSize;
+    const x0 = cx * cellSize;
+    const y0 = cy * cellSize;
+    const x1 = Math.min(this.world.width, x0 + cellSize);
+    const y1 = Math.min(this.world.height, y0 + cellSize);
+
+    // Get field values
+    const elevation = fields.elevation[fieldIdx];
+    const temperature = (fields.temperature && fields.temperature[fieldIdx]) ?? (fields.climate && fields.climate.temperature[fieldIdx]) ?? 20;
+    const precipitation = (fields.water !== undefined) ? fields.water[fieldIdx] * 1000 : ((fields.climate && fields.climate.precipitation[fieldIdx]) || 0);
+
+    const materialRatios = {
+      sand: (fields.rockFracSand || fields.material?.sand || new Float32Array(0))[fieldIdx] || 0,
+      soil: (fields.rockFracSoil || fields.material?.soil || new Float32Array(0))[fieldIdx] || 0,
+      granite: (fields.rockFracGranite || fields.material?.granite || new Float32Array(0))[fieldIdx] || 0,
+      basalt: (fields.rockFracBasalt || fields.material?.basalt || new Float32Array(0))[fieldIdx] || 0
+    };
+
+    // Convert normalized elevation to world coordinates
+    const surfaceY = Math.floor(this.world.height * (1 - Math.min(1, elevation)));
+
+    // Determine dominant material type
+    const dominantType = this.getDominantParticleType(materialRatios);
+
+    // Generate particles based on field data
+    for (let y = y0; y < y1; y++) {
+      for (let x = x0; x < x1; x++) {
+        const worldIdx = y * this.world.width + x;
+
+        // Set temperature (map coarse temperature into thermo grid)
+        this.world.temperature[worldIdx % this.world.temperature.length] = temperature;
+
+        // Determine particle type based on elevation and material
+        if (y >= surfaceY) {
+          // Below surface: solid material
+          // Use probability based on material ratios
+          const rand = Math.random();
+          let particleType = 0; // EMPTY default
+
+          if (rand < materialRatios.basalt) {
+            particleType = 10; // BASALT
+          } else if (rand < materialRatios.basalt + materialRatios.granite) {
+            particleType = 3; // GRANITE
+          } else if (rand < materialRatios.basalt + materialRatios.granite + materialRatios.sand) {
+            particleType = 1; // SAND
+          } else {
+            particleType = 4; // SOIL
+          }
+
+          this.world.particles[worldIdx] = particleType;
+        } else {
+          // Above surface: air or water based on precipitation
+          const waterProb = Math.min(0.3, precipitation / 3000);
+          this.world.particles[worldIdx] = Math.random() < waterProb ? 2 : 0; // WATER : EMPTY
+        }
+
+        // Mark as updated for rendering
+        this.world.updated[worldIdx] = 1;
+      }
+    }
+  }
+
+  /**
+   * Get the visible region of the world based on canvas viewport
+   */
+  getVisibleRegion() {
+    const canvasRect = this.canvas.canvas.getBoundingClientRect();
+    const scaleX = this.world.width / canvasRect.width;
+    const scaleY = this.world.height / canvasRect.height;
+
+    // Account for scroll position if canvas is in a scrollable container
+    const container = this.canvas.canvas.parentElement;
+    const scrollLeft = container ? container.scrollLeft : 0;
+    const scrollTop = container ? container.scrollTop : 0;
+
+    return {
+      x: Math.max(0, scrollLeft * scaleX - this.visibilityMargin),
+      y: Math.max(0, scrollTop * scaleY - this.visibilityMargin),
+      width: Math.min(this.world.width, (canvasRect.width + this.visibilityMargin * 2) * scaleX),
+      height: Math.min(this.world.height, (canvasRect.height + this.visibilityMargin * 2) * scaleY)
+    };
+  }
+
+  /**
+   * Smooth visual updates using interpolation between field states
+   * Prevents jarring changes when backend updates slowly
+   */
+  interpolateChanges() {
+    if (!this.interpolationSmoothing) return;
+
+    const interpolationFactor = 0.1; // Smoothing factor (0-1)
+
+    // Interpolate between current particles and buffer
+    for (let i = 0; i < this.world.size; i++) {
+      const current = this.world.particles[i];
+      const target = this.particleBuffer[i];
+
+      if (current !== target) {
+        // Weighted average for smooth transition
+        this.interpolationWeights[i] = current * (1 - interpolationFactor) + target * interpolationFactor;
+
+        // Apply interpolation if weights are significantly different
+        if (Math.abs(this.interpolationWeights[i] - current) > 0.1) {
+          this.world.particles[i] = Math.round(this.interpolationWeights[i]);
+          this.stats.interpolationFrames++;
+        }
+      }
+    }
+  }
+
+  /**
+   * Check if a field cell has changed significantly
+   */
+  hasFieldCellChanged(fields, cx, cy, fieldIdx) {
+    // Simple threshold-based change detection
+    const elevation = fields.elevation[fieldIdx];
+    const prevElevation = this.lastFieldValues?.elevation?.[fieldIdx];
+
+    if (prevElevation === undefined) return true;
+
+    // Consider significant if elevation changed by more than 5% of world height
+    const threshold = 0.05;
+    return Math.abs(elevation - prevElevation) > threshold;
+  }
+
+  /**
+   * Determine dominant particle type from material ratios
+   */
+  getDominantParticleType(materialRatios) {
+    const { sand, soil, granite, basalt } = materialRatios;
+    const total = sand + soil + granite + basalt;
+
+    if (total === 0) return 0; // EMPTY
+
+    const normalized = {
+      sand: sand / total,
+      soil: soil / total,
+      granite: granite / total,
+      basalt: basalt / total
+    };
+
+    // Return particle type with highest ratio
+    if (normalized.basalt > normalized.granite && normalized.basalt > normalized.sand && normalized.basalt > normalized.soil) return 10; // BASALT
+    if (normalized.granite > normalized.sand && normalized.granite > normalized.soil) return 3; // GRANITE
+    if (normalized.sand > normalized.soil) return 1; // SAND
+    return 4; // SOIL
+  }
+
+  /**
+   * Compare two regions for equality
+   */
+  regionsEqual(region1, region2) {
+    return Math.abs(region1.x - region2.x) < 1 &&
+           Math.abs(region1.y - region2.y) < 1 &&
+           Math.abs(region1.width - region2.width) < 1 &&
+           Math.abs(region1.height - region2.height) < 1;
+  }
+
+  /**
+   * Simple hash function for field state
+   */
+  hashFields(fields) {
+    let hash = 0;
+    const elev = fields.elevation || (fields.elevationField && fields.elevationField.elevation) || [];
+    const sampleRate = Math.max(1, Math.floor(elev.length / 100));
+
+    for (let i = 0; i < elev.length; i += sampleRate) {
+      hash = ((hash << 5) - hash + Math.round(elev[i] * 1000)) & 0xffffffff;
+    }
+
+    return hash;
+  }
+
+  /**
+   * Get rendering statistics
+   */
+  getStats() {
+    return {
+      ...this.stats,
+      visibleRegion: this.visibleRegion,
+      isInterpolating: this.interpolationSmoothing,
+      lastUpdateFrame: this.lastUpdateFrame
+    };
+  }
+
+  /**
+   * Reset statistics
+   */
+  resetStats() {
+    this.stats = {
+      cellsUpdated: 0,
+      particlesGenerated: 0,
+      interpolationFrames: 0
+    };
+  }
+
+  /**
+   * Cache field values for change detection
+   */
+  cacheFieldValues(fields) {
+    this.lastFieldValues = {
+      elevation: fields.elevation ? new Float32Array(fields.elevation) : null,
+      temperature: (fields.temperature || (fields.climate && fields.climate.temperature)) ? new Float32Array(fields.temperature || fields.climate.temperature) : null,
+      precipitation: (fields.water || (fields.climate && fields.climate.precipitation)) ? new Float32Array(fields.water || fields.climate.precipitation) : null
+    };
+  }
+}
