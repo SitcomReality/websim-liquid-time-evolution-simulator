@@ -45,18 +45,29 @@ export class ParticleUpdater {
         const activeChunks = Array.from(this.world.activeChunks);
         this.world.activeChunks.clear();
 
+        // Filter chunks based on stability system
+        const awakeChunks = activeChunks.filter(id => {
+            // Skip if chunk is truly asleep (state >= 2)
+            if (this.world.chunkManager.isChunkAsleep(id)) return false;
+            
+            // Check update frequency for drowsy chunks
+            if (!this.world.chunkManager.shouldUpdateChunk(id)) return false;
+            
+            return true;
+        });
+        
         // Skip sleeping chunks
-        const awakeChunks = activeChunks.filter(id => !this.world.isChunkAsleep(id));
+        const awakeChunksFinal = awakeChunks.filter(id => !this.world.isChunkAsleep(id));
         
         // Shuffle chunks to avoid directional bias
-        for (let i = awakeChunks.length - 1; i > 0; i--) {
+        for (let i = awakeChunksFinal.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
-            [awakeChunks[i], awakeChunks[j]] = [awakeChunks[j], awakeChunks[i]];
+            [awakeChunksFinal[i], awakeChunksFinal[j]] = [awakeChunksFinal[j], awakeChunksFinal[i]];
         }
         
         const timeScale = deltaTime / 16;
         
-        for (const chunkId of awakeChunks) {
+        for (const chunkId of awakeChunksFinal) {
             const chunkX = chunkId % this.world.chunksX;
             const chunkY = Math.floor(chunkId / this.world.chunksX);
 
