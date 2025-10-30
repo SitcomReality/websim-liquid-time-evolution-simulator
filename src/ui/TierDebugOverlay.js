@@ -1,1 +1,601 @@
-```\nimport { PARTICLE_TYPES } from '../../utils/Constants.js';\nimport { StateSerializer } from '../state/StateSerializer.js';\nimport { TierManager } from '../core/TierManager.js';\nimport { Simulation } from '../core/Simulation.js';\nimport { world } from '../core/World.js';\nimport { createBrushPanel } from './BrushPanel.js';\nimport { createTierPanel } from './TierPanel.js';\nimport { createTimeScalePanel } from './TimeScalePanel.js';\nimport { createSimulationPanel } from './SimulationPanel.js';\n\n// TierDebugOverlay\nexport class TierDebugOverlay {\n  constructor(canvas, world, simulation) {\n    this.canvas = canvas;\n    this.world = world;\n    this.simulation = simulation;\n\n    this.overlayType = null; // 'flow' | 'erosion' | 'material' | 'plates' | 'stress' | 'events'\n    this.overlayCtx = null;\n    this.overlayCanvas = null;\n\n    this.setup();\n  }\n\n  setup() {\n    // Create overlay canvas on top of main canvas\n    const container = this.canvas.canvas.parentElement;\n    if (!container) return;\n\n    this.overlayCanvas = document.createElement('canvas');\n    this.overlayCanvas.id = 'tierDebugOverlay';\n    this.overlayCanvas.width = this.canvas.canvas.width;\n    this.overlayCanvas.height = this.canvas.canvas.height;\n    this.overlayCanvas.style.position = 'absolute';\n    this.overlayCanvas.style.top = this.canvas.canvas.offsetTop + 'px';\n    this.overlayCanvas.style.left = this.canvas.canvas.offsetLeft + 'px';\n    this.overlayCanvas.style.pointerEvents = 'none';\n    this.overlayCanvas.style.zIndex = '10';\n    this.overlayCanvas.style.display = 'none';\n\n    container.style.position = 'relative';\n    container.appendChild(this.overlayCanvas);\n\n    this.overlayCtx = this.overlayCanvas.getContext('2d');\n\n    // Setup tier-specific debug controls\n    this.setupDebugControls();\n  }\n\n  setupDebugControls() {\n    // Create debug overlay panel if it doesn't exist\n    const controlsDiv = document.getElementById('controls');\n    if (!controlsDiv) return;\n\n    let debugPanel = document.getElementById('debugOverlayPanel');\n    if (!debugPanel) {\n      debugPanel = document.createElement('div');\n      debugPanel.id = 'debugOverlayPanel';\n      debugPanel.className = 'control-group';\n      debugPanel.innerHTML = `\n        <label>Debug Overlay</label>\n        <select id=\"debugOverlaySelect\">\n          <option value=\"none\">None</option>\n          <option value=\"flow\">Flow Network (T2)</option>\n          <option value=\"erosion\">Erosion Rate (T2)</option>\n          <option value=\"material\">Material Mix (T2)</option>\n          <option value=\"plates\">Plate Boundaries (T3)</option>\n          <option value=\"stress\">Stress Fields (T3)</option>\n          <option value=\"events\">Event Predictions (T3)</option>\n        </select>\n      `;\n      controlsDiv.appendChild(debugPanel);\n\n      const select = debugPanel.querySelector('#debugOverlaySelect');\n      select.addEventListener('change', (e) => this.setOverlayType(e.target.value));\n    }\n  }\n\n  /**\n   * Set which overlay to display\n   */\n  setOverlayType(type) {\n    this.overlayType = type;\n\n    if (type === 'none') {\n      this.overlayCanvas.style.display = 'none';\n    } else {\n      this.overlayCanvas.style.display = 'block';\n    }\n  }\n\n  /**\n   * Main render call - updates overlay based on current tier and selection\n   */\n  render() {\n    if (this.overlayType === 'none' || !this.overlayCanvas || this.overlayCanvas.style.display === 'none') {\n      return;\n    }\n\n    const tier = this.simulation.tierManager?.activeTier;\n    if (!tier) return;\n\n    // Clear overlay\n    this.overlayCtx.clearRect(0, 0, this.overlayCanvas.width, this.overlayCanvas.height);\n\n    // Render tier-specific overlays\n    if (tier.key === 'GEOLOGICAL_SCALE') {\n      this.renderTier2Overlay();\n    } else if (tier.key === 'TECTONIC_SCALE') {\n      this.renderTier3Overlay();\n    }\n  }\n\n  // ========== TIER 2 OVERLAYS ==========\n\n  renderTier2Overlay() {\n    const backend = this.simulation.backend;\n    if (!backend || !backend.elevationField) return;\n\n    const cellSize = backend.cellSize || 16;\n    const scaleX = this.canvas.canvas.width / this.world.width;\n    const scaleY = this.canvas.canvas.height / this.world.height;\n\n    switch (this.overlayType) {\n      case 'flow':\n        this.renderFlowNetwork(backend);\n        break;\n      case 'erosion':\n        this.renderErosionRates(backend);\n        break;\n      case 'material':\n        this.renderMaterialComposition(backend);\n        break;\n    }\n  }\n\n  /**\n   * Render flow network showing water drainage patterns\n   */\n  renderFlowNetwork(backend) {\n    const { elevationField } = backend;\n    if (!elevationField.flowDirX) return;\n\n    const cellSize = backend.cellSize || 16;\n    const scaleX = this.canvas.canvas.width / this.world.width;\n    const scaleY = this.canvas.canvas.height / this.world.height;\n\n    this.overlayCtx.strokeStyle = 'rgba(100, 150, 255, 0.6)';\n    this.overlayCtx.fillStyle = 'rgba(100, 150, 255, 0.2)';\n    this.overlayCtx.lineWidth = 1;\n\n    // Draw flow vectors\n    for (let y = 0; y < elevationField.height; y++) {\n      for (let x = 0; x < elevationField.width; x++) {\n        const idx = elevationField.getIndex(x, y);\n        const vx = elevationField.flowDirX[idx];\n        const vy = elevationField.flowDirY[idx];\n\n        if (Math.abs(vx) < 0.01 && Math.abs(vy) < 0.01) continue; // Skip null vectors\n\n        // Convert to pixel coordinates\n        const px = x * cellSize * scaleX;\n        const py = y * cellSize * scaleY;\n        const arrowLen = 8;\n\n        // Draw arrow\n        this.overlayCtx.beginPath();\n        this.overlayCtx.moveTo(px + vx * arrowLen, py + vy * arrowLen);\n        this.overlayCtx.lineTo(px - vx * arrowLen, py - vy * arrowLen);\n        this.overlayCtx.stroke();\n\n        // Draw arrowhead\n        const angle = Math.atan2(vy, vx);\n        this.overlayCtx.beginPath();\n        this.overlayCtx.moveTo(px + vx * arrowLen, py + vy * arrowLen);\n        this.overlayCtx.lineTo(\n          px + vx * arrowLen - Math.cos(angle - 0.4) * 4,\n          py + vy * arrowLen - Math.sin(angle - 0.4) * 4\n       );\n        this.overlayCtx.moveTo(px + vx * arrowLen, py + vy * arrowLen);\n        this.overlayCtx.lineTo(\n          px + vx * arrowLen - Math.cos(angle + 0.4) * 4,\n          py + vy * arrowLen - Math.sin(angle + 0.4) * 4\n        );\n        this.overlayCtx.stroke();\n      }\n    }\n\n    // Draw text label\n    this.overlayCtx.fillStyle = 'rgba(100, 150, 255, 0.8)';\n    this.overlayCtx.font = '12px Space Mono';\n    this.overlayCtx.fillText('Flow Network', 10, 20);\n  }\n\n  /**\n   * Render erosion rate visualization (red = high erosion)\n   */\n  renderErosionRates(backend) {\n    const { erosion, elevationField } = backend;\n    if (!erosion || !erosion.update) return;\n\n    const cellSize = backend.cellSize || 16;\n    const scaleX = this.canvas.canvas.width / this.world.width;\n    const scaleY = this.canvas.canvas.height / this.world.height;\n\n    // Compute erosion map\n    const erosionMap = erosion.update(0.016); // Dummy call to get rates\n\n    // Create image data for visualization\n    const imageData = this.overlayCtx.createImageData(\n      this.overlayCanvas.width,\n      this.overlayCanvas.height\n    );\n    const data = imageData.data;\n\n    for (let y = 0; y < elevationField.height; y++) {\n      for (let x = 0; x < elevationField.width; x++) {\n        const idx = y * elevationField.width + x;\n        const erosionRate = erosionMap[idx] || 0;\n\n        // Normalize erosion rate to 0..1\n        const normalized = Math.min(1, erosionRate * 100);\n\n        // Color: blue (low) to red (high)\n        const r = Math.floor(normalized * 255);\n        const g = 0;\n        const b = Math.floor((1 - normalized) * 200);\n\n        // Fill cell in overlay\n        const px = x * cellSize * scaleX;\n        const py = y * cellSize * scaleY;\n        const pw = Math.ceil(cellSize * scaleX);\n        const ph = Math.ceil(cellSize * scaleY);\n\n        for (let dy = 0; dy < ph; dy++) {\n          for (let dx = 0; dx < pw; dx++) {\n            const pixelIdx = ((py + dy) * this.overlayCanvas.width + (px + dx)) * 4;\n            data[pixelIdx] = r;\n            data[pixelIdx + 1] = g;\n            data[pixelIdx + 2] = b;\n            data[pixelIdx + 3] = 200;\n          }\n        }\n      }\n    }\n\n    this.overlayCtx.putImageData(imageData, 0, 0);\n\n    // Draw legend\n    this.overlayCtx.fillStyle = 'rgba(0, 0, 0, 0.7)';\n    this.overlayCtx.fillRect(5, 5, 150, 50);\n    this.overlayCtx.fillStyle = 'rgba(255, 255, 255, 0.9)';\n    this.overlayCtx.font = '12px Space Mono';\n    this.overlayCtx.fillText('Erosion Rate', 10, 20);\n    this.overlayCtx.fillStyle = 'rgba(255, 0, 0, 0.9)';\n    this.overlayCtx.fillText('█ High', 10, 35);\n    this.overlayCtx.fillStyle = 'rgba(0, 0, 200, 0.9)';\n    this.overlayCtx.fillText('█ Low', 70, 35);\n  }\n\n  /**\n   * Render material composition by dominant type\n   */\n  renderMaterialComposition(backend) {\n    const { materialField } = backend;\n    if (!materialField) return;\n\n    const cellSize = backend.cellSize || 16;\n    const scaleX = this.canvas.canvas.width / this.world.width;\n    const scaleY = this.canvas.canvas.height / this.world.height;\n\n    const colors = {\n      granite: [200, 200, 200, 255],\n      basalt: [80, 80, 100, 255],\n      sand: [220, 200, 120, 255],\n      soil: [140, 100, 60, 255]\n    };\n\n    // Create image data for visualization\n    const imageData = this.overlayCtx.createImageData(\n      this.overlayCanvas.width,\n      this.overlayCanvas.height\n    );\n    const data = imageData.data;\n\n    for (let y = 0; y < materialField.height; y++) {\n      for (let x = 0; x < materialField.width; x++) {\n        const idx = y * materialField.width + x;\n\n        // Determine dominant material\n        const sand = materialField.rockFracSand[idx];\n        const soil = materialField.rockFracSoil[idx];\n        const granite = materialField.rockFracGranite[idx];\n        const basalt = materialField.rockFracBasalt[idx];\n\n        let dominant = 'sand';\n        let maxRatio = sand;\n\n        if (soil > maxRatio) { dominant = 'soil'; maxRatio = soil; }\n        if (granite > maxRatio) { dominant = 'granite'; maxRatio = granite; }\n        if (basalt > maxRatio) { dominant = 'basalt'; maxRatio = basalt; }\n\n        const color = colors[dominant] || [128, 128, 128, 255];\n\n        // Fill cell in overlay\n        const px = x * cellSize * scaleX;\n        const py = y * cellSize * scaleY;\n        const pw = Math.ceil(cellSize * scaleX);\n        const ph = Math.ceil(cellSize * scaleY);\n\n        for (let dy = 0; dy < ph; dy++) {\n          for (let dx = 0; dx < pw; dx++) {\n            const pixelIdx = ((py + dy) * this.overlayCanvas.width + (px + dx)) * 4;\n            data[pixelIdx] = color[0];\n            data[pixelIdx + 1] = color[1];\n            data[pixelIdx + 2] = color[2];\n            data[pixelIdx + 3] = color[3];\n          }\n        }\n      }\n    }\n\n    this.overlayCtx.putImageData(imageData, 0, 0);\n\n    // Draw legend\n    this.overlayCtx.fillStyle = 'rgba(0, 0, 0, 0.7)';\n    this.overlayCtx.fillRect(5, 5, 160, 90);\n    this.overlayCtx.fillStyle = 'rgba(255, 255, 255, 0.9)';\n    this.overlayCtx.font = '12px Space Mono';\n    this.overlayCtx.fillText('Material Composition', 10, 20);\n\n    // Legend items\n    const legendItems = [\n      { color: colors.granite, label: 'Granite' },\n      { color: colors.basalt, label: 'Basalt' },\n      { color: colors.sand, label: 'Sand' },\n      { color: colors.soil, label: 'Soil' }\n    ];\n\n    let y = 35;\n    for (const item of legendItems) {\n      this.overlayCtx.fillStyle = item.color;\n      this.overlayCtx.fillText(item.label, 10, y);\n      y += 15;\n    }\n  }\n\n  // ========== TIER 3 OVERLAYS ==========\n\n  renderTier3Overlay() {\n    const backend = this.simulation.backend;\n    if (!backend || !backend.plateSystem) return;\n\n    switch (this.overlayType) {\n      case 'plates':\n        this.renderPlateBoundaries(backend);\n        break;\n      case 'stress':\n        this.renderStressFields(backend);\n        break;\n      case 'events':\n        this.renderEventPredictions(backend);\n        break;\n    }\n  }\n\n  /**\n   * Render plate boundaries and plate IDs\n   */\n  renderPlateBoundaries(backend) {\n    const { plateSystem } = backend;\n    if (!plateSystem || !plateSystem.boundaries) return;\n\n    const cellSize = backend.cellSize || 32;\n    const scaleX = this.canvas.canvas.width / this.world.width;\n    const scaleY = this.canvas.canvas.height / this.world.height;\n\n    // Draw plate IDs (regions with different colors)\n    const plateColors = new Map();\n    const hues = [];\n    for (let i = 0; i < plateSystem.plates.length; i++) {\n      hues.push((i / plateSystem.plates.length) * 360);\n    }\n\n    const imageData = this.overlayCtx.createImageData(\n      this.overlayCanvas.width,\n      this.overlayCanvas.height\n    );\n    const data = imageData.data;\n\n    // Fill with plate IDs\n    for (let y = 0; y < plateSystem.height; y++) {\n      for (let x = 0; x < plateSystem.width; x++) {\n        const idx = y * plateSystem.width + x;\n        const plateId = plateSystem.plateIdField[idx];\n        const hue = hues[plateId] || 0;\n\n        // HSL to RGB\n        const { r, g, b } = this.hslToRgb(hue / 360, 0.5, 0.5);\n\n        // Fill cell in overlay\n        const px = x * cellSize * scaleX;\n        const py = y * cellSize * scaleY;\n        const pw = Math.ceil(cellSize * scaleX);\n        const ph = Math.ceil(cellSize * scaleY);\n\n        for (let dy = 0; dy < ph; dy++) {\n          for (let dx = 0; dx < pw; dx++) {\n            const pixelIdx = ((py + dy) * this.overlayCanvas.width + (px + dx)) * 4;\n            data[pixelIdx] = r;\n            data[pixelIdx + 1] = g;\n            data[pixelIdx + 2] = b;\n            data[pixelIdx + 3] = 100;\n          }\n        }\n      }\n    }\n\n    this.overlayCtx.putImageData(imageData, 0, 0);\n\n    // Draw boundaries in bright lines\n    this.overlayCtx.strokeStyle = 'rgba(255, 255, 255, 0.9)';\n    this.overlayCtx.lineWidth = 2;\n\n    for (const boundary of plateSystem.boundaries) {\n      const px = (boundary.x * cellSize + cellSize / 2) * scaleX;\n      const py = (boundary.y * cellSize + cellSize / 2) * scaleY;\n      const radius = 4;\n\n      this.overlayCtx.beginPath();\n      this.overlayCtx.arc(px, py, radius, 0, Math.PI * 2);\n      this.overlayCtx.stroke();\n\n      // Draw boundary type indicator\n      let symbol = '—';\n      let color = 'rgba(100, 200, 255, 0.9)';\n\n      if (boundary.type === 'divergent') {\n        symbol = '◀▶';\n        color = 'rgba(100, 255, 100, 0.9)';\n      } else if (boundary.type === 'convergent') {\n        symbol = '▶◀';\n        color = 'rgba(255, 100, 100, 0.9)';\n      } else if (boundary.type === 'transform') {\n        symbol = '↔';\n        color = 'rgba(255, 200, 100, 0.9)';\n      }\n\n      this.overlayCtx.fillStyle = color;\n      this.overlayCtx.font = '10px Space Mono';\n      this.overlayCtx.fillText(symbol, px - 5, py + 3);\n    }\n\n    // Draw legend\n    this.overlayCtx.fillStyle = 'rgba(0, 0, 0, 0.7)';\n    this.overlayCtx.fillRect(5, 5, 160, 80);\n    this.overlayCtx.fillStyle = 'rgba(255, 255, 255, 0.9)';\n    this.overlayCtx.font = '12px Space Mono';\n    this.overlayCtx.fillText('Plate Boundaries', 10, 20);\n\n    // Legend items\n    const legends = [\n      { symbol: '◀▶', color: 'rgba(100, 255, 100, 0.9)', label: 'Divergent' },\n      { symbol: '▶◀', color: 'rgba(255, 100, 100, 0.9)', label: 'Convergent' },\n      { symbol: '↔', color: 'rgba(255, 200, 100, 0.9)', label: 'Transform' }\n    ];\n\n    let y = 35;\n    for (const leg of legends) {\n      this.overlayCtx.fillStyle = leg.color;\n      this.overlayCtx.fillText(leg.symbol, 10, y);\n      this.overlayCtx.fillStyle = 'rgba(255, 255, 255, 0.9)';\n      this.overlayCtx.fillText(leg.label, 25, y);\n      y += 15;\n    }\n  }\n\n  /**\n   * Render stress/pressure fields near boundaries\n   */\n  renderStressFields(backend) {\n    const { plateSystem } = backend;\n    if (!plateSystem || !plateSystem.boundaries) return;\n\n    const cellSize = backend.cellSize || 32;\n    const scaleX = this.canvas.canvas.width / this.world.width;\n    const scaleY = this.canvas.canvas.height / this.world.height;\n\n    // Create stress heatmap\n    const imageData = this.overlayCtx.createImageData(\n      this.overlayCanvas.width,\n      this.overlayCanvas.height\n    );\n    const data = imageData.data;\n\n    // Calculate stress at each point (proximity to boundaries + boundary strength)\n    for (let y = 0; y < plateSystem.height; y++) {\n      for (let x = 0; x < plateSystem.width; x++) {\n        let stress = 0;\n\n        // Find distance to nearest boundary and accumulate stress\n        for (const boundary of plateSystem.boundaries) {\n          const dx = x - boundary.x;\n          const dy = y - boundary.y;\n          const dist = Math.sqrt(dx * dx + dy * dy);\n          const influence = Math.exp(-dist * 0.3) * (boundary.strength || 1);\n          stress += influence;\n        }\n\n        // Normalize stress\n        const normalized = Math.min(1, stress / 2);\n\n        // Color: cool (low stress) to hot (high stress)\n        const r = Math.floor(normalized * 255);\n        const g = Math.floor((1 - normalized) * 100);\n        const b = Math.floor((1 - normalized) * 200);\n\n        // Fill cell\n        const px = x * cellSize * scaleX;\n        const py = y * cellSize * scaleY;\n        const pw = Math.ceil(cellSize * scaleX);\n        const ph = Math.ceil(cellSize * scaleY);\n\n        for (let dy = 0; dy < ph; dy++) {\n          for (let dx = 0; dx < pw; dx++) {\n            const pixelIdx = ((py + dy) * this.overlayCanvas.width + (px + dx)) * 4;\n            data[pixelIdx] = r;\n            data[pixelIdx + 1] = g;\n            data[pixelIdx + 2] = b;\n            data[pixelIdx + 3] = 150;\n          }\n        }\n      }\n    }\n\n    this.overlayCtx.putImageData(imageData, 0, 0);\n\n    // Draw legend\n    this.overlayCtx.fillStyle = 'rgba(0, 0, 0, 0.7)';\n    this.overlayCtx.fillRect(5, 5, 150, 60);\n    this.overlayCtx.fillStyle = 'rgba(255, 255, 255, 0.9)';\n    this.overlayCtx.font = '12px Space Mono';\n    this.overlayCtx.fillText('Stress Fields', 10, 20);\n    this.overlayCtx.fillStyle = 'rgba(255, 0, 0, 0.9)';\n    this.overlayCtx.fillText('█ High Stress', 10, 35);\n    this.overlayCtx.fillStyle = 'rgba(0, 100, 200, 0.9)';\n    this.overlayCtx.fillText('█ Low Stress', 10, 50);\n  }\n\n  /**\n   * Render event predictions (volcanoes, earthquakes, etc.)\n   */\n  renderEventPredictions(backend) {\n    const { eventManager } = backend;\n    if (!eventManager) return;\n\n    const cellSize = backend.cellSize || 32;\n    const scaleX = this.canvas.canvas.width / this.world.width;\n    const scaleY = this.canvas.canvas.height / this.world.height;\n\n    this.overlayCtx.fillStyle = 'rgba(0, 0, 0, 0.7)';\n    this.overlayCtx.fillRect(5, 5, 200, 100);\n    this.overlayCtx.fillStyle = 'rgba(255, 255, 255, 0.9)';\n    this.overlayCtx.font = '12px Space Mono';\n    this.overlayCtx.fillText('Event Predictions', 10, 20);\n\n    // Draw recent events from history\n    const eventSummary = eventManager.getEventSummary();\n    const recentEvents = eventManager.eventHistory.slice(-5);\n\n    let y = 35;\n    this.overlayCtx.fillStyle = 'rgba(200, 200, 200, 0.9)';\n    this.overlayCtx.font = '10px Space Mono';\n\n    if (recentEvents.length === 0) {\n      this.overlayCtx.fillText('No recent events', 10, y);\n      y += 15;\n    } else {\n      for (const event of recentEvents) {\n        const typeEmoji = this.getEventEmoji(event.type);\n        this.overlayCtx.fillText(`${typeEmoji} ${event.type}`, 10, y);\n        y += 12;\n      }\n    }\n\n    // Global temperature indicator\n    this.overlayCtx.fillStyle = 'rgba(255, 100, 100, 0.9)';\n    const tempText = `Global Temp: ${eventSummary.globalTemperature.toFixed(1)}°C`;\n    this.overlayCtx.fillText(tempText, 10, y + 5);\n\n    // Draw active events on map\n    for (const event of recentEvents) {\n      if (event.x !== undefined && event.y !== undefined) {\n        const px = event.x * cellSize * scaleX;\n        const py = event.y * cellSize * scaleY;\n\n        this.overlayCtx.fillStyle = this.getEventColor(event.type);\n        this.overlayCtx.beginPath();\n        this.overlayCtx.arc(px, py, 6, 0, Math.PI * 2);\n        this.overlayCtx.fill();\n\n        // Draw label\n        this.overlayCtx.fillStyle = 'rgba(255, 255, 255, 0.7)';\n        this.overlayCtx.font = '10px Space Mono';\n        this.overlayCtx.fillText(this.getEventEmoji(event.type), px - 3, py + 3);\n      }\n    }\n  }\n\n  getEventEmoji(type) {\n    const emojis = {\n      volcanic_eruption: '🌋',\n      supervolcano: '💥',\n      asteroid_impact: '☄️',\n      glacial_advance: '❄️',\n      glacial_retreat: '🌊'\n    };\n    return emojis[type] || '⚠️';\n  }\n\n  getEventColor(type) {\n    const colors = {\n      volcanic_eruption: 'rgba(255, 100, 0, 0.9)',\n      supervolcano: 'rgba(255, 0, 0, 0.9)',\n      asteroid_impact: 'rgba(200, 0, 200, 0.9)',\n      glacial_advance: 'rgba(100, 200, 255, 0.9)',\n      glacial_retreat: 'rgba(100, 150, 255, 0.9)'\n    };\n    return colors[type] || 'rgba(255, 255, 255, 0.9)';\n  }\n\n  /**\n   * Helper: Convert HSL to RGB\n   */\n  hslToRgb(h, s, l) {\n    let r, g, b;\n\n    if (s === 0) {\n      r = g = b = l;\n    } else {\n      const hue2rgb = (p, q, t) => {\n        if (t < 0) t += 1;\n        if (t > 1) t -= 1;\n        if (t < 1 / 6) return p + (q - p) * 6 * t;\n        if (t < 1 / 2) return q;\n        if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;\n        return p;\n      };\n\n      const q = l < 0.5 ? l * (1 + s) : l + s - l * s;\n      const p = 2 * l - q;\n      r = hue2rgb(p, q, h + 1 / 3);\n      g = hue2rgb(p, q, h);\n      b = hue2rgb(p, q, h - 1 / 3);\n    }\n\n    return {\n      r: Math.round(r * 255),\n      g: Math.round(g * 255),\n      b: Math.round(b * 255)\n    };\n  }\n}\n```\n\nsrc/core/WorldParts/ChunkManager.js\n```\n/**\n * ChunkManager\n * Analyzes chunk state to determine sleep status with more sophistication.\n * \n * States:\n * - ACTIVE (0): Full simulation, all updaters run\n * - DROWSY (1): Reduced simulation frequency (1/3 updates)\n * - SLEEPING (2): No updates; woken by external events or neighbors\n * - FOSSIL (3): Deep bedrock, never simulated (immutable)\n */\nexport class ChunkManager {\n  constructor(world, chunkManagerConfig = {}) {\n    this.world = world;\n    this.chunkSize = chunkManagerConfig.chunkSize || 16;\n    this.chunksX = Math.ceil(world.width / this.chunkSize);\n    this.chunksY = Math.ceil(world.height / this.chunkSize);\n    this.activeChunks = new Set();\n    this.chunkSleepCounter = new Uint16Array(this.chunksX * this.chunksY);\n    this.chunkSleepThreshold = chunkManagerConfig.chunkSleepThreshold || 60;\n\n    // Advanced stability and wake systems\n    this.stability = new ChunkStability(world, this, chunkManagerConfig);\n    this.wakeSystem = new WakeSystem(world, this, this.stability, chunkManagerConfig);\n  }\n\n  reset() {\n    this.activeChunks.clear();\n    this.chunkSleepCounter.fill(0);\n    this.stability.chunkStates.fill(0); // All ACTIVE initially\n    this.stability.stabilityScores.fill(1.0);\n    this.stability.drowsySkipCounters.fill(0);\n    this.stability.wokenTicks.fill(0);\n  }\n\n  markChunkActive(x, y) {\n    if (!this.world.particleData) return;\n    if (x < 0 || x >= this.world.width || y < 0 || y >= this.world.height) return;\n    const chunkX = Math.floor(x / this.chunkSize);\n    const chunkY = Math.floor(y / this.chunkSize);\n    const id = chunkY * this.chunksX + chunkX;\n    this.activeChunks.add(id);\n    this.chunkSleepCounter[id] = 0;\n    this.stability.updateChunkState(id, this.stability.getStabilityScore(chunkX, chunkY), 0.016);\n  }\n\n  updateChunkSleep() {\n    // Update stability analysis periodically\n    this.stability.updateStability(0.016); // Assume ~60 Hz\n    \n    // Update wake system\n    this.wakeSystem.update(0.016);\n\n    // Traditional sleep counter fallback for direct changes\n    for (let i = 0; i < this.chunkSleepCounter.length; i++) {\n      if (!this.activeChunks.has(i)) {\n        this.chunkSleepCounter[i] = Math.min(this.chunkSleepCounter[i] + 1, this.chunkSleepThreshold);\n        // Activate if reached threshold\n        if (this.chunkSleepCounter[i] >= this.chunkSleepThreshold) {\n          this.activeChunks.add(i);\n          this.chunkSleepCounter[i] = 0;\n        }\n    }\n\n  }\n\n  /**\n   * Should chunk be updated this frame?\n   */\n  shouldUpdateChunk(chunkId) {\n    return this.stability.shouldUpdateChunk(chunkId);\n  }\n\n  /**\n   * Force-wake a chunk (used by events, external input).\n   */\n  forceWake(chunkId) {\n    this.stability.forceWake(chunkId);\n  }\n\n  /**\n   * Get diagnostic stats.\n   */\n  getStats() {\n    const stabilityStats = this.stability.getStats();\n    const wakeStats = this.wakeSystem.getStats();\n    return {\n      chunks: stabilityStats,\n      wake: wakeStats\n    };\n  }\n\n  /**\n   * Get chunk state name for debugging.\n   */\n  getStateName(chunkId) {\n    return this.stability.getStateName(chunkId);\n  }\n}\n```\n\nsrc/core/backends/tier2/RegionalClimate.js\n```\n/** \n * RegionalClimate\n * Simplified atmospheric model for Tier 2:\n * - Prevailing wind patterns by latitude bands (easterlies/westerlies)\n * - Orographic effects (rain shadow, windward precipitation)\n * - Temperature gradients (latitude, elevation)\n * - Moisture accumulation over oceans and precipitation over mountains\n * \n * Operates on yearly averages; avoids per-pixel, per-frame wind computation cost.\n */\nexport class RegionalClimate {\n  constructor(fields, config = {}) {\n    this.fields = fields;\n    this.W = fields.materialField.width;\n    this.H = fields.materialField.height;\n\n    // Configurable parameters\n    this.waterLevel = config.waterLevel ?? 0.32; // normalized elevation threshold for \"ocean\"\n    this.lapseRate = config.lapseRate ?? (6.5 / 1000); // °C per meter (units are arbitrary -> treated as normalized)\n    this.baselinePrecipMm = config.baselinePrecipMm ?? 600;\n    this.maxPrecipMm = config.maxPrecipMm ?? 3000;\n    this.minPrecipMm = config.minPrecipMm ?? 50;\n\n    // Wind strength by latitude band\n    this.bandWindStrength = {\n      equatorial: 0.35,   // Hadley cells trade winds\n      midlat: 0.45,       // Westerlies stronger\n      polar: 0.30         // Polar easterlies weaker\n    };\n\n    // Seasonality by band (amplitude)\n    this.bandSeasonality = {\n      equatorial: 0.15,\n      midlat: 0.30,\n      polar: 0.20\n    };\n  }\n\n  /**\n   * Determine prevailing wind direction and band membership for a given latitude ratio (0..1).\n   * Returns { vx, vy, strength, seasonality, band }\n   */\n  getPrevailingWind(lat) {\n    // Bands: 0.0-0.25 polar (north), 0.25-0.45 mid (north), 0.45-0.55 equatorial, 0.55-0.75 mid (south
+/**
+ * TierDebugOverlay
+ * Provides debug visualizations for each simulation tier:
+ *  - Tier 2: flow networks, erosion rates, material composition
+ *  - Tier 3: plate boundaries, stress fields, event predictions
+ *
+ * Usage: new TierDebugOverlay(canvasWrapper, world, simulation)
+ *   canvasWrapper: the Canvas instance (has .canvas HTMLElement and sizing)
+ *   world: World instance
+ *   simulation: Simulation instance
+ */
+export class TierDebugOverlay {
+  constructor(canvasWrapper, world, simulation) {
+    this.canvasWrapper = canvasWrapper;
+    this.world = world;
+    this.simulation = simulation;
+
+    this.overlayCanvas = null;
+    this.overlayCtx = null;
+    this.overlayType = 'none'; // 'none' | 'flow' | 'erosion' | 'material' | 'plates' | 'stress' | 'events'
+
+    this._resizeHandler = () => this._resizeOverlay();
+    this._setup();
+  }
+
+  _setup() {
+    const parent = this.canvasWrapper.canvas.parentElement;
+    if (!parent) return;
+
+    // Create overlay canvas and position it absolutely over the main canvas
+    this.overlayCanvas = document.createElement('canvas');
+    this.overlayCanvas.id = 'tierDebugOverlay';
+    this.overlayCanvas.style.position = 'absolute';
+    this.overlayCanvas.style.top = `${this.canvasWrapper.canvas.offsetTop}px`;
+    this.overlayCanvas.style.left = `${this.canvasWrapper.canvas.offsetLeft}px`;
+    this.overlayCanvas.style.pointerEvents = 'none';
+    this.overlayCanvas.style.zIndex = '20';
+    this.overlayCanvas.style.display = 'none';
+
+    parent.style.position = parent.style.position || 'relative';
+    parent.appendChild(this.overlayCanvas);
+
+    this.overlayCtx = this.overlayCanvas.getContext('2d');
+
+    // Controls in the main UI
+    this._createDebugControl();
+
+    // Keep size in sync
+    window.addEventListener('resize', this._resizeHandler);
+    this._resizeOverlay();
+  }
+
+  destroy() {
+    window.removeEventListener('resize', this._resizeHandler);
+    if (this.overlayCanvas && this.overlayCanvas.parentElement) {
+      this.overlayCanvas.parentElement.removeChild(this.overlayCanvas);
+    }
+  }
+
+  _resizeOverlay() {
+    if (!this.overlayCanvas || !this.canvasWrapper || !this.canvasWrapper.canvas) return;
+    const main = this.canvasWrapper.canvas;
+    this.overlayCanvas.width = main.width;
+    this.overlayCanvas.height = main.height;
+    this.overlayCanvas.style.width = main.style.width;
+    this.overlayCanvas.style.height = main.style.height;
+  }
+
+  _createDebugControl() {
+    const controlsDiv = document.getElementById('controls');
+    if (!controlsDiv) return;
+
+    if (document.getElementById('debugOverlayPanel')) return;
+
+    const panel = document.createElement('div');
+    panel.id = 'debugOverlayPanel';
+    panel.className = 'control-group';
+    panel.innerHTML = `
+      <label>Debug Overlay</label>
+      <select id="debugOverlaySelect">
+        <option value="none">None</option>
+        <option value="flow">Flow Network (T2)</option>
+        <option value="erosion">Erosion Rate (T2)</option>
+        <option value="material">Material Mix (T2)</option>
+        <option value="plates">Plate Boundaries (T3)</option>
+        <option value="stress">Stress Fields (T3)</option>
+        <option value="events">Event Predictions (T3)</option>
+      </select>
+    `;
+    controlsDiv.appendChild(panel);
+
+    const select = panel.querySelector('#debugOverlaySelect');
+    select.addEventListener('change', (e) => this.setOverlayType(e.target.value));
+  }
+
+  setOverlayType(type) {
+    this.overlayType = type || 'none';
+    if (!this.overlayCanvas) return;
+    this.overlayCanvas.style.display = this.overlayType === 'none' ? 'none' : 'block';
+  }
+
+  render() {
+    if (!this.overlayCanvas || !this.overlayCtx) return;
+    if (this.overlayType === 'none') return;
+
+    // Resize if needed before drawing
+    this._resizeOverlay();
+
+    // Clear
+    this.overlayCtx.clearRect(0, 0, this.overlayCanvas.width, this.overlayCanvas.height);
+
+    const tier = this.simulation.tierManager?.activeTier;
+    if (!tier) return;
+
+    if (tier.key === 'GEOLOGICAL_SCALE') {
+      this._renderTier2();
+    } else if (tier.key === 'TECTONIC_SCALE') {
+      this._renderTier3();
+    } else {
+      // For Tier 1, nothing special beyond existing overlays
+      this._drawMessage('Tier 1: use particle-level debug tools');
+    }
+  }
+
+  // ---------------- TIER 2 ----------------
+  _renderTier2() {
+    const backend = this.simulation.backend;
+    if (!backend) return;
+
+    switch (this.overlayType) {
+      case 'flow':
+        this._renderFlowNetwork(backend);
+        break;
+      case 'erosion':
+        this._renderErosionRates(backend);
+        break;
+      case 'material':
+        this._renderMaterialComposition(backend);
+        break;
+      default:
+        break;
+    }
+  }
+
+  _renderFlowNetwork(backend) {
+    const elev = backend.elevationField;
+    if (!elev || !elev.flowDirX) {
+      this._drawMessage('Flow data unavailable');
+      return;
+    }
+
+    const ctx = this.overlayCtx;
+    const cw = this.overlayCanvas.width, ch = this.overlayCanvas.height;
+    const cellSize = backend.cellSize || 16;
+    const scaleX = cw / this.world.width;
+    const scaleY = ch / this.world.height;
+
+    ctx.strokeStyle = 'rgba(100,150,255,0.7)';
+    ctx.lineWidth = 1;
+
+    for (let y = 0; y < elev.height; y++) {
+      for (let x = 0; x < elev.width; x++) {
+        const idx = elev.getIndex(x, y);
+        const vx = elev.flowDirX[idx] || 0;
+        const vy = elev.flowDirY[idx] || 0;
+
+        if (Math.abs(vx) < 0.001 && Math.abs(vy) < 0.001) continue;
+
+        const px = (x * cellSize + cellSize / 2) * scaleX;
+        const py = (y * cellSize + cellSize / 2) * scaleY;
+        const len = Math.min(12, Math.hypot(vx, vy) * 12 + 4);
+
+        ctx.beginPath();
+        ctx.moveTo(px - vx * len, py - vy * len);
+        ctx.lineTo(px + vx * len, py + vy * len);
+        ctx.stroke();
+
+        // arrowhead
+        const ang = Math.atan2(vy, vx);
+        ctx.beginPath();
+        ctx.moveTo(px + vx * len, py + vy * len);
+        ctx.lineTo(px + vx * len - Math.cos(ang - 0.4) * 4, py + vy * len - Math.sin(ang - 0.4) * 4);
+        ctx.moveTo(px + vx * len, py + vy * len);
+        ctx.lineTo(px + vx * len - Math.cos(ang + 0.4) * 4, py + vy * len - Math.sin(ang + 0.4) * 4);
+        ctx.stroke();
+      }
+    }
+
+    this._drawLegend('Flow Network', 'rgba(100,150,255,0.9)');
+  }
+
+  _renderErosionRates(backend) {
+    if (!backend.erosion || typeof backend.erosion.update !== 'function') {
+      this._drawMessage('Erosion calculator unavailable');
+      return;
+    }
+
+    // Request a computed erosion map (note: this may be synchronous or lightweight)
+    const erosionMap = backend.erosion.update(0) || new Float32Array(backend.elevationField.size);
+
+    const ctx = this.overlayCtx;
+    const cw = this.overlayCanvas.width, ch = this.overlayCanvas.height;
+    const image = ctx.createImageData(cw, ch);
+    const data = image.data;
+    const cellSize = backend.cellSize || 16;
+    const scaleX = cw / this.world.width;
+    const scaleY = ch / this.world.height;
+
+    for (let y = 0; y < backend.elevationField.height; y++) {
+      for (let x = 0; x < backend.elevationField.width; x++) {
+        const idx = backend.elevationField.getIndex(x, y);
+        const rate = Math.min(1, (erosionMap[idx] || 0) * 100);
+
+        const r = Math.floor(rate * 255);
+        const g = 0;
+        const b = Math.floor((1 - rate) * 200);
+        const alpha = 200;
+
+        const px = Math.floor(x * cellSize * scaleX);
+        const py = Math.floor(y * cellSize * scaleY);
+        const pw = Math.ceil(cellSize * scaleX);
+        const ph = Math.ceil(cellSize * scaleY);
+
+        for (let yy = 0; yy < ph; yy++) {
+          for (let xx = 0; xx < pw; xx++) {
+            const sx = px + xx;
+            const sy = py + yy;
+            if (sx < 0 || sx >= cw || sy < 0 || sy >= ch) continue;
+            const pix = (sy * cw + sx) * 4;
+            data[pix] = r;
+            data[pix + 1] = g;
+            data[pix + 2] = b;
+            data[pix + 3] = alpha;
+          }
+        }
+      }
+    }
+
+    ctx.putImageData(image, 0, 0);
+    this._drawLegend('Erosion Rate (red=high)', 'rgba(255,0,0,0.9)');
+  }
+
+  _renderMaterialComposition(backend) {
+    const mat = backend.materialField;
+    if (!mat) {
+      this._drawMessage('Material field unavailable');
+      return;
+    }
+
+    const ctx = this.overlayCtx;
+    const cw = this.overlayCanvas.width, ch = this.overlayCanvas.height;
+    const image = ctx.createImageData(cw, ch);
+    const data = image.data;
+    const cellSize = backend.cellSize || 16;
+    const scaleX = cw / this.world.width;
+    const scaleY = ch / this.world.height;
+
+    const colors = {
+      granite: [200, 200, 200, 255],
+      basalt: [80, 80, 100, 255],
+      sand: [220, 200, 120, 255],
+      soil: [140, 100, 60, 255],
+    };
+
+    for (let y = 0; y < mat.height; y++) {
+      for (let x = 0; x < mat.width; x++) {
+        const idx = mat.getIndex(x, y);
+        const s = mat.sand[idx] || 0;
+        const so = mat.soil[idx] || 0;
+        const g = mat.granite[idx] || 0;
+        const b = mat.basalt[idx] || 0;
+
+        let dominant = 'soil';
+        let val = so;
+        if (s > val) { dominant = 'sand'; val = s; }
+        if (g > val) { dominant = 'granite'; val = g; }
+        if (b > val) { dominant = 'basalt'; val = b; }
+
+        const col = colors[dominant] || [128, 128, 128, 255];
+
+        const px = Math.floor(x * cellSize * scaleX);
+        const py = Math.floor(y * cellSize * scaleY);
+        const pw = Math.ceil(cellSize * scaleX);
+        const ph = Math.ceil(cellSize * scaleY);
+
+        for (let yy = 0; yy < ph; yy++) {
+          for (let xx = 0; xx < pw; xx++) {
+            const sx = px + xx;
+            const sy = py + yy;
+            if (sx < 0 || sx >= cw || sy < 0 || sy >= ch) continue;
+            const pix = (sy * cw + sx) * 4;
+            data[pix] = col[0];
+            data[pix + 1] = col[1];
+            data[pix + 2] = col[2];
+            data[pix + 3] = col[3];
+          }
+        }
+      }
+    }
+
+    ctx.putImageData(image, 0, 0);
+    this._drawLegend('Material Composition', 'rgba(255,255,255,0.9)', [
+      { color: colors.granite, label: 'Granite' },
+      { color: colors.basalt, label: 'Basalt' },
+      { color: colors.sand, label: 'Sand' },
+      { color: colors.soil, label: 'Soil' }
+    ]);
+  }
+
+  // ---------------- TIER 3 ----------------
+  _renderTier3() {
+    const backend = this.simulation.backend;
+    if (!backend) return;
+
+    switch (this.overlayType) {
+      case 'plates':
+        this._renderPlateBoundaries(backend);
+        break;
+      case 'stress':
+        this._renderStressFields(backend);
+        break;
+      case 'events':
+        this._renderEventPredictions(backend);
+        break;
+      default:
+        break;
+    }
+  }
+
+  _renderPlateBoundaries(backend) {
+    const ps = backend.plateSystem;
+    if (!ps || !ps.plateIdField) {
+      this._drawMessage('Plate system unavailable');
+      return;
+    }
+
+    const ctx = this.overlayCtx;
+    const cw = this.overlayCanvas.width, ch = this.overlayCanvas.height;
+    const cellSize = backend.cellSize || 32;
+    const scaleX = cw / this.world.width;
+    const scaleY = ch / this.world.height;
+
+    // Fill plates with semi-transparent colors
+    const plateCount = ps.plates.length;
+    const hues = new Array(plateCount).fill(0).map((_, i) => (i / Math.max(1, plateCount)) * 360);
+
+    const image = ctx.createImageData(cw, ch);
+    const data = image.data;
+
+    for (let y = 0; y < ps.height; y++) {
+      for (let x = 0; x < ps.width; x++) {
+        const idx = ps.getIndex(x, y);
+        const pid = ps.plateIdField[idx] || 0;
+        const hue = hues[pid] || 0;
+        const rgb = this._hslToRgb(hue / 360, 0.5, 0.5);
+
+        const px = Math.floor(x * cellSize * scaleX);
+        const py = Math.floor(y * cellSize * scaleY);
+        const pw = Math.ceil(cellSize * scaleX);
+        const ph = Math.ceil(cellSize * scaleY);
+
+        for (let yy = 0; yy < ph; yy++) {
+          for (let xx = 0; xx < pw; xx++) {
+            const sx = px + xx;
+            const sy = py + yy;
+            if (sx < 0 || sx >= cw || sy < 0 || sy >= ch) continue;
+            const pix = (sy * cw + sx) * 4;
+            data[pix] = rgb.r;
+            data[pix + 1] = rgb.g;
+            data[pix + 2] = rgb.b;
+            data[pix + 3] = 100;
+          }
+        }
+      }
+    }
+
+    ctx.putImageData(image, 0, 0);
+
+    // Draw boundaries
+    ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+    ctx.lineWidth = 1.5;
+
+    for (const b of ps.boundaries || []) {
+      const px = (b.x * cellSize + cellSize / 2) * scaleX;
+      const py = (b.y * cellSize + cellSize / 2) * scaleY;
+      ctx.beginPath();
+      ctx.arc(px, py, 4, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // symbol for type
+      let symbol = '—';
+      let color = 'rgba(255,255,255,0.9)';
+      if (b.type === 'divergent') { symbol = '◀▶'; color = 'rgba(100,255,100,0.95)'; }
+      else if (b.type === 'convergent') { symbol = '▶◀'; color = 'rgba(255,100,100,0.95)'; }
+      else if (b.type === 'transform') { symbol = '↔'; color = 'rgba(255,200,100,0.95)'; }
+
+      ctx.fillStyle = color;
+      ctx.font = '10px Space Mono';
+      ctx.fillText(symbol, px - 6, py + 3);
+    }
+
+    this._drawLegend('Plate Boundaries', 'rgba(255,255,255,0.9)', [
+      { symbol: '◀▶', color: 'rgba(100,255,100,0.9)', label: 'Divergent' },
+      { symbol: '▶◀', color: 'rgba(255,100,100,0.9)', label: 'Convergent' },
+      { symbol: '↔', color: 'rgba(255,200,100,0.9)', label: 'Transform' }
+    ]);
+  }
+
+  _renderStressFields(backend) {
+    const ps = backend.plateSystem;
+    if (!ps || !ps.boundaries) {
+      this._drawMessage('Plate/stress data unavailable');
+      return;
+    }
+
+    const ctx = this.overlayCtx;
+    const cw = this.overlayCanvas.width, ch = this.overlayCanvas.height;
+    const cellSize = backend.cellSize || 32;
+    const scaleX = cw / this.world.width;
+    const scaleY = ch / this.world.height;
+
+    const image = ctx.createImageData(cw, ch);
+    const data = image.data;
+
+    // Compute stress per plate-cell based on proximity to boundaries
+    for (let y = 0; y < ps.height; y++) {
+      for (let x = 0; x < ps.width; x++) {
+        let stress = 0;
+        const idx = ps.getIndex(x, y);
+
+        for (const b of ps.boundaries) {
+          const dx = x - b.x;
+          const dy = y - b.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          stress += Math.exp(-dist * 0.3) * (b.strength || 1);
+        }
+
+        const normalized = Math.min(1, stress / 2.0);
+
+        const r = Math.floor(normalized * 255);
+        const g = Math.floor((1 - normalized) * 100);
+        const bcol = Math.floor((1 - normalized) * 200);
+        const alpha = 150;
+
+        const px = Math.floor(x * cellSize * scaleX);
+        const py = Math.floor(y * cellSize * scaleY);
+        const pw = Math.ceil(cellSize * scaleX);
+        const ph = Math.ceil(cellSize * scaleY);
+
+        for (let yy = 0; yy < ph; yy++) {
+          for (let xx = 0; xx < pw; xx++) {
+            const sx = px + xx;
+            const sy = py + yy;
+            if (sx < 0 || sx >= cw || sy < 0 || sy >= ch) continue;
+            const pix = (sy * cw + sx) * 4;
+            data[pix] = r;
+            data[pix + 1] = g;
+            data[pix + 2] = bcol;
+            data[pix + 3] = alpha;
+          }
+        }
+      }
+    }
+
+    ctx.putImageData(image, 0, 0);
+    this._drawLegend('Stress Fields (hot=high)', 'rgba(255,0,0,0.9)');
+  }
+
+  _renderEventPredictions(backend) {
+    const ev = backend.eventManager;
+    if (!ev) {
+      this._drawMessage('Event manager unavailable');
+      return;
+    }
+
+    const ctx = this.overlayCtx;
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(6, 6, 220, 120);
+
+    ctx.fillStyle = 'rgba(255,255,255,0.95)';
+    ctx.font = '12px Space Mono';
+    ctx.fillText('Event Predictions', 12, 24);
+
+    const recent = ev.eventHistory.slice(-6);
+    ctx.font = '10px Space Mono';
+    let y = 42;
+    if (recent.length === 0) {
+      ctx.fillStyle = 'rgba(200,200,200,0.9)';
+      ctx.fillText('No recent events', 12, y);
+      y += 18;
+    } else {
+      for (const e of recent) {
+        const emoji = this._getEventEmoji(e.type);
+        ctx.fillStyle = 'rgba(200,200,200,0.95)';
+        ctx.fillText(`${emoji} ${e.type} @ (${e.x ?? '?'} , ${e.y ?? '?'})`, 12, y);
+        y += 16;
+      }
+    }
+
+    // Also draw event markers on map for events with coordinates
+    for (const e of recent) {
+      if (typeof e.x === 'number' && typeof e.y === 'number') {
+        const px = e.x * (backend.cellSize || 32) * (this.overlayCanvas.width / this.world.width);
+        const py = e.y * (backend.cellSize || 32) * (this.overlayCanvas.height / this.world.height);
+        ctx.beginPath();
+        ctx.fillStyle = this._getEventColor(e.type);
+        ctx.arc(px, py, 6, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = 'rgba(255,255,255,0.9)';
+        ctx.font = '10px Space Mono';
+        ctx.fillText(this._getEventEmoji(e.type), px - 4, py + 4);
+      }
+    }
+  }
+
+  // ---------------- Helpers ----------------
+  _drawMessage(msg) {
+    const ctx = this.overlayCtx;
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(6, 6, 260, 32);
+    ctx.fillStyle = 'rgba(255,255,255,0.95)';
+    ctx.font = '12px Space Mono';
+    ctx.fillText(msg, 12, 28);
+    ctx.restore();
+  }
+
+  _drawLegend(title, titleColor = 'rgba(255,255,255,0.9)', items = null) {
+    const ctx = this.overlayCtx;
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(8, 8, 180, items ? (items.length * 16 + 34) : 40);
+    ctx.fillStyle = titleColor;
+    ctx.font = '12px Space Mono';
+    ctx.fillText(title, 12, 26);
+
+    if (items && Array.isArray(items)) {
+      ctx.font = '10px Space Mono';
+      let y = 44;
+      for (const it of items) {
+        if (it.color) {
+          const c = it.color;
+          ctx.fillStyle = Array.isArray(c) ? `rgba(${c[0]},${c[1]},${c[2]},${(c[3]||255)/255})` : c;
+          ctx.fillText('■', 12, y);
+          ctx.fillStyle = 'rgba(255,255,255,0.9)';
+          ctx.fillText(it.label, 28, y);
+        } else {
+          ctx.fillStyle = it.color || 'rgba(255,255,255,0.9)';
+          ctx.fillText(`${it.symbol || ''} ${it.label}`, 12, y);
+        }
+        y += 16;
+      }
+    }
+
+    ctx.restore();
+  }
+
+  _getEventEmoji(type) {
+    const map = {
+      volcanic_eruption: '🌋',
+      supervolcano: '💥',
+      asteroid_impact: '☄️',
+      glacial_advance: '❄️',
+      glacial_retreat: '🌊'
+    };
+    return map[type] || '⚠️';
+  }
+
+  _getEventColor(type) {
+    const map = {
+      volcanic_eruption: 'rgba(255,100,0,0.95)',
+      supervolcano: 'rgba(255,0,0,0.95)',
+      asteroid_impact: 'rgba(200,0,200,0.95)',
+      glacial_advance: 'rgba(100,200,255,0.95)',
+      glacial_retreat: 'rgba(100,150,255,0.95)'
+    };
+    return map[type] || 'rgba(255,255,255,0.95)';
+  }
+
+  _hslToRgb(h, s, l) {
+    let r, g, b;
+    if (s === 0) { r = g = b = l; }
+    else {
+      const hue2rgb = (p, q, t) => {
+        if (t < 0) t += 1;
+        if (t > 1) t -= 1;
+        if (t < 1/6) return p + (q - p) * 6 * t;
+        if (t < 1/2) return q;
+        if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+        return p;
+      };
+      const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+      const p = 2 * l - q;
+      r = hue2rgb(p, q, h + 1/3);
+      g = hue2rgb(p, q, h);
+      b = hue2rgb(p, q, h - 1/3);
+    }
+    return { r: Math.round(r * 255), g: Math.round(g * 255), b: Math.round(b * 255) };
+  }
+}
