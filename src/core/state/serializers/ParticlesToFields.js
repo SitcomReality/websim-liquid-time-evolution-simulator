@@ -1,1 +1,99 @@
-```\nimport { PARTICLE_TYPES, TEMPERATURE } from '../../utils/Constants.js';\n\n/**\n * Convert particle world to field representation.\n * Aggregates particles into coarser field cells (Tier 1 → Tier 2).\n */\nexport function particlesToFields(world, cellSize = 16) {\n  const width = Math.ceil(world.width / cellSize);\n  const height = Math.ceil(world.height / cellSize);\n\n  const fields = {\n    width,\n    height,\n    cellSize,\n    elevation: new Float32Array(width * height),\n    material: {\n      sand: new Float32Array(width * height),\n      soil: new Float32Array(width * height),\n      granite: new Float32Array(width * height),\n      basalt: new Float32Array(width * height)\n    },\n    climate: {\n      temperature: new Float32Array(width * height),\n      precipitation: new Float32Array(width * height),\n      windDirX: new Float32Array(width * height),\n      windDirY: new Float32Array(width * height)\n    }\n  };\n\n  const getIndex = (x, y) => {\n    if (x < 0 || y < 0 || x >= width || y >= height) return -1;\n    return y * width + x;\n  };\n\n  for (let cy = 0; cy < height; cy++) {\n    for (let cx = 0; cx < width; cx++) {\n      const idx = getIndex(cx, cy);\n      const x0 = cx * cellSize;\n      const y0 = cy * cellSize;\n      const x1 = Math.min(world.width, x0 + cellSize);\n      const y1 = Math.min(world.height, y0 + cellSize);\n\n      let sand = 0, soil = 0, granite = 0, basalt = 0;\n      let highestSolidY = world.height;\n      let tempSum = 0, tempCount = 0;\n      let waterCount = 0;\n\n      for (let y = y0; y < y1; y++) {\n        for (let x = x0; x < x1; x++) {\n          const p = world.getParticle(x, y);\n\n          if (p !== PARTICLE_TYPES.EMPTY &&\n              p !== PARTICLE_TYPES.WATER &&\n              p !== PARTICLE_TYPES.STEAM &&\n              p !== PARTICLE_TYPES.CLOUD &&\n              p !== PARTICLE_TYPES.PLANT) {\n            highestSolidY = Math.min(highestSolidY, y);\n          }\n\n          if (p === PARTICLE_TYPES.SAND) sand++;\n          else if (p === PARTICLE_TYPES.SOIL) soil++;\n          else if (p === PARTICLE_TYPES.GRANITE) granite++;\n          else if (p === PARTICLE_TYPES.BASALT) basalt++;\n          else if (p === PARTICLE_TYPES.WATER) waterCount++;\n\n          const t = world.getTemperature(x, y);\n          tempSum += t;\n          tempCount++;\n        }\n      }\n\n      const cellArea = (x1 - x0) * (y1 - y0);\n      const surfaceFound = highestSolidY < world.height;\n      fields.elevation[idx] = surfaceFound ? \n          Math.max(0, 1 - (highestSolidY / world.height)) : 0;\n\n      const rockTotal = sand + soil + granite + basalt || 1;\n      fields.material.sand[idx] = sand / rockTotal;\n      fields.material.soil[idx] = soil / rockTotal;\n      fields.material.granite[idx] = granite / rockTotal;\n      fields.material.basalt[idx] = basalt / rockTotal;\n\n      fields.climate.temperature[idx] = tempCount > 0 ? \n          tempSum / tempCount : TEMPERATURE.AMBIENT;\n      fields.climate.precipitation[idx] = (waterCount / cellArea) * 2000;\n    }\n  }\n\n  return fields;\n}\n\n\n```\n\n```
+import { PARTICLE_TYPES, TEMPERATURE } from '../../utils/Constants.js';
+
+/**
+ * Convert particle world to field representation.
+ * Aggregates particles into coarser field cells (Tier 1 → Tier 2).
+ *
+ * @param {Object} world - World instance with particle accessors
+ * @param {number} cellSize - size in pixels of each field cell (default 16)
+ * @returns {Object} fields - coarse fields (elevation, material, climate)
+ */
+export function particlesToFields(world, cellSize = 16) {
+  const width = Math.ceil(world.width / cellSize);
+  const height = Math.ceil(world.height / cellSize);
+
+  const fields = {
+    width,
+    height,
+    cellSize,
+    elevation: new Float32Array(width * height),
+    material: {
+      sand: new Float32Array(width * height),
+      soil: new Float32Array(width * height),
+      granite: new Float32Array(width * height),
+      basalt: new Float32Array(width * height)
+    },
+    climate: {
+      temperature: new Float32Array(width * height),
+      precipitation: new Float32Array(width * height),
+      windDirX: new Float32Array(width * height),
+      windDirY: new Float32Array(width * height)
+    }
+  };
+
+  const getIndex = (x, y) => {
+    if (x < 0 || y < 0 || x >= width || y >= height) return -1;
+    return y * width + x;
+  };
+
+  for (let cy = 0; cy < height; cy++) {
+    for (let cx = 0; cx < width; cx++) {
+      const idx = getIndex(cx, cy);
+      const x0 = cx * cellSize;
+      const y0 = cy * cellSize;
+      const x1 = Math.min(world.width, x0 + cellSize);
+      const y1 = Math.min(world.height, y0 + cellSize);
+
+      let sand = 0, soil = 0, granite = 0, basalt = 0;
+      let highestSolidY = world.height;
+      let tempSum = 0, tempCount = 0;
+      let waterCount = 0;
+
+      for (let y = y0; y < y1; y++) {
+        for (let x = x0; x < x1; x++) {
+          const p = world.getParticle(x, y);
+
+          // Consider non-fluid/non-empty particles as "solid surface" candidates
+          if (p !== PARTICLE_TYPES.EMPTY &&
+              p !== PARTICLE_TYPES.WATER &&
+              p !== PARTICLE_TYPES.STEAM &&
+              p !== PARTICLE_TYPES.CLOUD &&
+              p !== PARTICLE_TYPES.PLANT) {
+            highestSolidY = Math.min(highestSolidY, y);
+          }
+
+          if (p === PARTICLE_TYPES.SAND) sand++;
+          else if (p === PARTICLE_TYPES.SOIL) soil++;
+          else if (p === PARTICLE_TYPES.GRANITE) granite++;
+          else if (p === PARTICLE_TYPES.BASALT) basalt++;
+          else if (p === PARTICLE_TYPES.WATER) waterCount++;
+
+          const t = world.getTemperature(x, y);
+          if (typeof t === 'number' && Number.isFinite(t)) {
+            tempSum += t;
+            tempCount++;
+          }
+        }
+      }
+
+      const cellArea = (x1 - x0) * (y1 - y0) || 1;
+      const surfaceFound = highestSolidY < world.height;
+      fields.elevation[idx] = surfaceFound ?
+        Math.max(0, 1 - (highestSolidY / world.height)) : 0;
+
+      const rockTotal = sand + soil + granite + basalt || 1;
+      fields.material.sand[idx] = sand / rockTotal;
+      fields.material.soil[idx] = soil / rockTotal;
+      fields.material.granite[idx] = granite / rockTotal;
+      fields.material.basalt[idx] = basalt / rockTotal;
+
+      fields.climate.temperature[idx] = tempCount > 0 ?
+        tempSum / tempCount : TEMPERATURE.AMBIENT;
+
+      // Precipitation heuristic: fraction of cell occupied by water scaled to mm/year
+      fields.climate.precipitation[idx] = (waterCount / cellArea) * 2000;
+    }
+  }
+
+  return fields;
+}
