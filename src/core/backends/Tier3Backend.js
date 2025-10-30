@@ -89,6 +89,11 @@ export class Tier3Backend {
       this.subduction.update(deltaTime);
     }
 
+    // Isostatic adjustment (very low frequency)
+    if (this.updateCount % 4 === 0) {
+      this.applyIsostasy(deltaTime);
+    }
+
     // Climate and events
     this.eventManager.update(deltaTime);
     this.glacialCycles.update(deltaTime);
@@ -139,6 +144,8 @@ export class Tier3Backend {
       },
       { cellSize: this.cellSize, numPlatesX: 3, numPlatesY: 2 }
     );
+    // Detect initial boundaries from the inherited field mosaic
+    this.plateSystem.detectBoundaries();
 
     console.log('[Tier3Backend] Transitioned from Tier2 data');
   }
@@ -216,6 +223,25 @@ export class Tier3Backend {
       if (state.glacialCycles.glacierThickness) {
         this.glacialCycles.glacierThickness.set(state.glacialCycles.glacierThickness);
       }
+    }
+  }
+
+  // Light isostatic compensation: heavy crust sinks slightly; light crust rebounds
+  applyIsostasy(deltaTime) {
+    const g = this.fieldGrid;
+    const n = g.size;
+    let totalLoad = 0;
+    for (let i = 0; i < n; i++) {
+      // Effective "load" from rock mix; heavier rocks count more
+      const load = g.rockFracBasalt[i] * 3.0 + g.rockFracGranite[i] * 2.7 + g.rockFracSand[i] * 1.5 + g.rockFracSoil[i] * 1.3;
+      totalLoad += load;
+    }
+    const avgLoad = totalLoad / Math.max(1, n);
+    const rate = 0.0002 * deltaTime; // very slow adjustment
+    for (let i = 0; i < n; i++) {
+      const load = g.rockFracBasalt[i] * 3.0 + g.rockFracGranite[i] * 2.7 + g.rockFracSand[i] * 1.5 + g.rockFracSoil[i] * 1.3;
+      const delta = (avgLoad - load) * rate; // heavy (load>avg) → negative (subsidence), light → positive (rebound)
+      g.elevation[i] = Math.max(0, Math.min(1, g.elevation[i] + delta));
     }
   }
 }
