@@ -6,6 +6,7 @@ import { MaterialFlowSimulator } from './tier2/MaterialFlowSimulator.js';
 import { LandformEvolver } from './tier2/LandformEvolver.js';
 import { ViscousRockFlow } from './tier2/ViscousRockFlow.js';
 import { PARTICLE_TYPES } from '../../utils/Constants.js';
+import { RegionalClimate } from './tier2/RegionalClimate.js';
 
 export class Tier2Backend {
   constructor(world, config = {}) {
@@ -34,6 +35,9 @@ export class Tier2Backend {
     
     // Inject erosion calculator into flow simulator for integrated calculation
     this.flow.erosion = this.erosion;
+
+    // Regional climate model (yearly averages)
+    this.regionalClimate = new RegionalClimate(fields);
   }
 
   update(deltaTime, fidelity) {
@@ -56,8 +60,10 @@ export class Tier2Backend {
       this.rockFlow.update(deltaTime * fidelity);
     }
 
-    // Update climate based on new topography
-    this.climateField.updateClimate(this.elevationField);
+    // Update climate based on new topography using regional model (approx yearly cadence)
+    if (this.updateCount % 8 === 0) {
+      this.regionalClimate.updateYearly(1);
+    }
   }
 
   /**
@@ -106,7 +112,8 @@ export class Tier2Backend {
     
     // Calculate initial slopes and flow networks
     this.elevationField.calculateFlowNetwork();
-    this.climateField.updateClimate(this.elevationField);
+    // Seed initial climate using regional averages
+    this.regionalClimate.updateYearly(1);
   }
   
   /**
