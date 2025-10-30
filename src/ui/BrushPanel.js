@@ -1,1 +1,129 @@
-import { PARTICLE_TYPES } from '../utils/Constants.js';\nimport { classifyEnvironment } from '../biology/PlantEcology.js';\n\n/**\n * BrushPanel\n * Handles brush type selection, size, and particle drawing on canvas.\n */\nexport class BrushPanel {\n  constructor(world, canvas) {\n    this.world = world;\n    this.canvas = canvas;\n    \n    this.brushType = PARTICLE_TYPES.SAND;\n    this.brushSize = 5;\n    this.isDrawing = false;\n    \n    this.setup();\n  }\n\n  setup() {\n    // Brush type selector\n    const brushTypeSelect = document.getElementById('brushType');\n    if (brushTypeSelect) {\n      brushTypeSelect.addEventListener('change', (e) => this.onBrushTypeChange(e));\n    }\n\n    // Brush size slider\n    const brushSizeSlider = document.getElementById('brushSize');\n    if (brushSizeSlider) {\n      brushSizeSlider.addEventListener('input', (e) => {\n        this.brushSize = parseInt(e.target.value);\n      });\n    }\n\n    // Canvas drawing events\n    this.canvas.canvas.addEventListener('mousedown', (e) => this.startDrawing(e));\n    this.canvas.canvas.addEventListener('mousemove', (e) => this.draw(e));\n    this.canvas.canvas.addEventListener('mouseup', () => this.stopDrawing());\n    this.canvas.canvas.addEventListener('mouseleave', () => this.stopDrawing());\n\n    // Touch support\n    this.canvas.canvas.addEventListener('touchstart', (e) => {\n      e.preventDefault();\n      this.startDrawing(e.touches[0]);\n    });\n    this.canvas.canvas.addEventListener('touchmove', (e) => {\n      e.preventDefault();\n      this.draw(e.touches[0]);\n    });\n    this.canvas.canvas.addEventListener('touchend', () => this.stopDrawing());\n  }\n\n  onBrushTypeChange(e) {\n    const typeMap = {\n      'sand': PARTICLE_TYPES.SAND,\n      'water': PARTICLE_TYPES.WATER,\n      'granite': PARTICLE_TYPES.GRANITE,\n      'basalt': PARTICLE_TYPES.BASALT,\n      'soil': PARTICLE_TYPES.SOIL,\n      'lava': PARTICLE_TYPES.LAVA,\n      'ice': PARTICLE_TYPES.ICE,\n      'steam': PARTICLE_TYPES.STEAM,\n      'plant': PARTICLE_TYPES.PLANT,\n      'erase': PARTICLE_TYPES.EMPTY\n    };\n    this.brushType = typeMap[e.target.value];\n  }\n\n  startDrawing(e) {\n    this.isDrawing = true;\n    this.draw(e);\n  }\n\n  stopDrawing() {\n    this.isDrawing = false;\n  }\n\n  draw(e) {\n    if (!this.isDrawing) return;\n    \n    const rect = this.canvas.canvas.getBoundingClientRect();\n    const scaleX = this.world.width / rect.width;\n    const scaleY = this.world.height / rect.height;\n    \n    const x = Math.floor((e.clientX - rect.left) * scaleX);\n    const y = Math.floor((e.clientY - rect.top) * scaleY);\n    \n    // Draw circle of particles\n    for (let dy = -this.brushSize; dy <= this.brushSize; dy++) {\n      for (let dx = -this.brushSize; dx <= this.brushSize; dx++) {\n        if (dx * dx + dy * dy <= this.brushSize * this.brushSize) {\n          const px = x + dx;\n          const py = y + dy;\n\n          if (this.brushType === PARTICLE_TYPES.PLANT) {\n            if (this.world.getParticle(px, py) !== PARTICLE_TYPES.BEDROCK) {\n              const env = classifyEnvironment(this.world, px, py);\n              this.world.setParticle(px, py, this.brushType, [0, 0, 0, env.colorCode]);\n            }\n          } else if (this.brushType !== PARTICLE_TYPES.EMPTY) {\n            this.world.setParticle(px, py, this.brushType);\n            // Set temperature for certain brush types\n            if (this.brushType === PARTICLE_TYPES.ICE) {\n              this.world.setTemperature(px, py, -10);\n            } else if (this.brushType === PARTICLE_TYPES.LAVA) {\n              this.world.setTemperature(px, py, 1300);\n            } else if (this.brushType === PARTICLE_TYPES.STEAM) {\n              this.world.setTemperature(px, py, 110);\n            }\n          } else {\n            // Erase\n            this.world.setParticle(px, py, this.brushType);\n          }\n        }\n      }\n    }\n  }\n}\n\n\n```
+import { PARTICLE_TYPES } from '../utils/Constants.js';
+import { classifyEnvironment } from '../biology/PlantEcology.js';
+
+/**
+ * BrushPanel
+ * Handles brush type selection, size, and particle drawing on canvas.
+ */
+export class BrushPanel {
+  constructor(world, canvas) {
+    this.world = world;
+    this.canvas = canvas;
+
+    this.brushType = PARTICLE_TYPES.SAND;
+    this.brushSize = 5;
+    this.isDrawing = false;
+
+    this.setup();
+  }
+
+  setup() {
+    // Brush type selector
+    const brushTypeSelect = document.getElementById('brushType');
+    if (brushTypeSelect) {
+      brushTypeSelect.addEventListener('change', (e) => this.onBrushTypeChange(e));
+    }
+
+    // Brush size slider
+    const brushSizeSlider = document.getElementById('brushSize');
+    if (brushSizeSlider) {
+      brushSizeSlider.addEventListener('input', (e) => {
+        this.brushSize = parseInt(e.target.value, 10);
+      });
+    }
+
+    // Canvas drawing events (use mouse down to start drawing)
+    const canvasEl = this.canvas && this.canvas.canvas;
+    if (!canvasEl) return;
+
+    canvasEl.addEventListener('mousedown', (e) => this.startDrawing(e));
+    canvasEl.addEventListener('mousemove', (e) => this.draw(e));
+    canvasEl.addEventListener('mouseup', () => this.stopDrawing());
+    canvasEl.addEventListener('mouseleave', () => this.stopDrawing());
+
+    // Touch support
+    canvasEl.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      if (e.touches && e.touches[0]) this.startDrawing(e.touches[0]);
+    }, { passive: false });
+
+    canvasEl.addEventListener('touchmove', (e) => {
+      e.preventDefault();
+      if (e.touches && e.touches[0]) this.draw(e.touches[0]);
+    }, { passive: false });
+
+    canvasEl.addEventListener('touchend', () => this.stopDrawing());
+  }
+
+  onBrushTypeChange(e) {
+    const typeMap = {
+      'sand': PARTICLE_TYPES.SAND,
+      'water': PARTICLE_TYPES.WATER,
+      'granite': PARTICLE_TYPES.GRANITE,
+      'basalt': PARTICLE_TYPES.BASALT,
+      'soil': PARTICLE_TYPES.SOIL,
+      'lava': PARTICLE_TYPES.LAVA,
+      'ice': PARTICLE_TYPES.ICE,
+      'steam': PARTICLE_TYPES.STEAM,
+      'plant': PARTICLE_TYPES.PLANT,
+      'erase': PARTICLE_TYPES.EMPTY
+    };
+    this.brushType = typeMap[e.target.value] ?? PARTICLE_TYPES.SAND;
+  }
+
+  startDrawing(e) {
+    this.isDrawing = true;
+    this.draw(e);
+  }
+
+  stopDrawing() {
+    this.isDrawing = false;
+  }
+
+  draw(e) {
+    if (!this.isDrawing) return;
+    if (!this.canvas || !this.canvas.canvas || !this.world) return;
+
+    const rect = this.canvas.canvas.getBoundingClientRect();
+    const scaleX = this.world.width / rect.width;
+    const scaleY = this.world.height / rect.height;
+
+    const clientX = typeof e.clientX === 'number' ? e.clientX : 0;
+    const clientY = typeof e.clientY === 'number' ? e.clientY : 0;
+
+    const x = Math.floor((clientX - rect.left) * scaleX);
+    const y = Math.floor((clientY - rect.top) * scaleY);
+
+    // Draw circle of particles
+    for (let dy = -this.brushSize; dy <= this.brushSize; dy++) {
+      for (let dx = -this.brushSize; dx <= this.brushSize; dx++) {
+        if (dx * dx + dy * dy > this.brushSize * this.brushSize) continue;
+
+        const px = x + dx;
+        const py = y + dy;
+        if (!this.world.inBounds(px, py)) continue;
+
+        if (this.brushType === PARTICLE_TYPES.PLANT) {
+          if (this.world.getParticle(px, py) !== PARTICLE_TYPES.BEDROCK) {
+            const env = classifyEnvironment(this.world, px, py);
+            this.world.setParticle(px, py, this.brushType, [0, 0, 0, env.colorCode]);
+          }
+        } else if (this.brushType !== PARTICLE_TYPES.EMPTY) {
+          this.world.setParticle(px, py, this.brushType);
+
+          // Set temperature for certain brush types
+          if (this.brushType === PARTICLE_TYPES.ICE) {
+            this.world.setTemperature(px, py, -10);
+          } else if (this.brushType === PARTICLE_TYPES.LAVA) {
+            this.world.setTemperature(px, py, 1300);
+          } else if (this.brushType === PARTICLE_TYPES.STEAM) {
+            this.world.setTemperature(px, py, 110);
+          }
+        } else {
+          // Erase
+          this.world.setParticle(px, py, this.brushType);
+        }
+      }
+    }
+  }
+}
