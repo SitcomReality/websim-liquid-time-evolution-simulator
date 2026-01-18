@@ -75,6 +75,66 @@ export class FieldGrid {
   }
 
   /**
+   * Facade methods for compatibility with Tier 2/3 systems that expect 
+   * ElevationField, MaterialField, and ClimateField APIs.
+   */
+  adjustElevation(x, y, delta) {
+    const idx = this.getIndex(x, y);
+    if (idx >= 0) {
+      this.elevation[idx] = Math.max(0, Math.min(1, this.elevation[idx] + delta));
+    }
+  }
+
+  addMaterial(x, y, type, amount) {
+    const idx = this.getIndex(x, y);
+    if (idx < 0) return;
+    const map = { sand: 'rockFracSand', soil: 'rockFracSoil', granite: 'rockFracGranite', basalt: 'rockFracBasalt' };
+    const key = map[type];
+    if (key) {
+      this[key][idx] = Math.max(0, Math.min(1, this[key][idx] + amount));
+    }
+  }
+
+  removeMaterial(x, y, type, amount) {
+    const idx = this.getIndex(x, y);
+    if (idx < 0) return;
+    const map = { sand: 'rockFracSand', soil: 'rockFracSoil', granite: 'rockFracGranite', basalt: 'rockFracBasalt' };
+    const key = map[type];
+    if (key) {
+      this[key][idx] = Math.max(0, Math.min(1, this[key][idx] - amount));
+    }
+  }
+
+  getMaterialRatio(x, y, type) {
+    const idx = this.getIndex(x, y);
+    if (idx < 0) return 0;
+    const map = { sand: 'rockFracSand', soil: 'rockFracSoil', granite: 'rockFracGranite', basalt: 'rockFracBasalt' };
+    return this[map[type] || 'rockFracSoil'][idx];
+  }
+
+  getDominantType(x, y) {
+    const idx = this.getIndex(x, y);
+    if (idx < 0) return 'soil';
+    let max = -1, type = 'soil';
+    if (this.rockFracSand[idx] > max) { max = this.rockFracSand[idx]; type = 'sand'; }
+    if (this.rockFracSoil[idx] > max) { max = this.rockFracSoil[idx]; type = 'soil'; }
+    if (this.rockFracGranite[idx] > max) { max = this.rockFracGranite[idx]; type = 'granite'; }
+    if (this.rockFracBasalt[idx] > max) { max = this.rockFracBasalt[idx]; type = 'basalt'; }
+    return type;
+  }
+
+  getTemperature(x, y) {
+    const idx = this.getIndex(x, y);
+    return idx >= 0 ? this.temperature[idx] : TEMPERATURE.AMBIENT;
+  }
+
+  getPrecipitation(x, y) {
+    const idx = this.getIndex(x, y);
+    // Rough heuristic mapping water content (0..1) to rainfall (mm/year)
+    return idx >= 0 ? this.water[idx] * 2000 : 600;
+  }
+
+  /**
    * Convert the current particle world into coarse fields.
    * Captures elevation, temperature, water content, vegetation coverage, and rock mix per cell.
    */
