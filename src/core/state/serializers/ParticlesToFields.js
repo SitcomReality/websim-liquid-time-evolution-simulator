@@ -1,4 +1,4 @@
-import { PARTICLE_TYPES, TEMPERATURE } from '../../utils/Constants.js';
+import { PARTICLE_TYPES, TEMPERATURE } from '../../../utils/Constants.js';
 
 /**
  * Convert particle world to field representation.
