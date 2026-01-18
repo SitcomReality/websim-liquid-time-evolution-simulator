@@ -1,1 +1,230 @@
-```javascript\nimport { PARTICLE_TYPES } from '../../utils/Constants.js';\n\nexport class Tier2Overlays {\n  constructor(coordinator) {\n    this.coordinator = coordinator;\n  }\n\n  destroy() {\n    // nothing to cleanup for now\n  }\n\n  render(type) {\n    switch (type) {\n      case 'flow': this._renderFlowNetwork(); break;\n      case 'erosion': this._renderErosionRates(); break;\n      case 'material': this._renderMaterialComposition(); break;\n      default: break;\n    }\n  }\n\n  _renderFlowNetwork() {\n    const backend = this.coordinator.simulationRef.backend;\n    const elev = backend?.elevationField;\n    const ctx = this.coordinator.context;\n    if (!elev || !elev.flowDirX || !ctx) {\n      this.coordinator._drawMessage('Flow data unavailable');\n      return;\n    }\n\n    const cw = this.coordinator.canvas.width, ch = this.coordinator.canvas.height;\n    const cellSize = backend.cellSize || 16;\n    const scaleX = cw / this.coordinator.worldRef.width;\n    const scaleY = ch / this.coordinator.worldRef.height;\n\n    ctx.strokeStyle = 'rgba(100,150,255,0.7)';\n    ctx.lineWidth = 1;\n\n    for (let y = 0; y < elev.height; y++) {\n      for (let x = 0; x < elev.width; x++) {\n        const idx = elev.getIndex(x, y);\n        const vx = elev.flowDirX[idx] || 0;\n        const vy = elev.flowDirY[idx] || 0;\n        if (Math.abs(vx) < 0.001 && Math.abs(vy) < 0.001) continue;\n\n        const px = (x * cellSize + cellSize / 2) * scaleX;\n        const py = (y * cellSize + cellSize / 2) * scaleY;\n        const len = Math.min(12, Math.hypot(vx, vy) * 12 + 4);\n\n        ctx.beginPath();\n        ctx.moveTo(px - vx * len, py - vy * len);\n        ctx.lineTo(px + vx * len, py + vy * len);\n        ctx.stroke();\n\n        // arrowhead\n        const ang = Math.atan2(vy, vx);\n        ctx.beginPath();\n        ctx.moveTo(px + vx * len, py + vy * len);\n        ctx.lineTo(px + vx * len - Math.cos(ang - 0.4) * 4, py + vy * len - Math.sin(ang - 0.4) * 4);\n        ctx.moveTo(px + vx * len, py + vy * len);\n        ctx.lineTo(px + vx * len - Math.cos(ang + 0.4) * 4, py + vy * len - Math.sin(ang + 0.4) * 4);\n        ctx.stroke();\n      }\n    }\n\n    this._drawLegend('Flow Network', 'rgba(100,150,255,0.9)');\n  }\n\n  _renderErosionRates() {\n    const backend = this.coordinator.simulationRef.backend;\n    if (!backend || !backend.erosion) {\n      this.coordinator._drawMessage('Erosion calculator unavailable');\n      return;\n    }\n\n    // Use erosion.update(deltaTime) to compute a map; backend.erosion.update returns a Float32Array\n    const erosionMap = backend.erosion.update(0) || new Float32Array(backend.elevationField.size);\n\n    const ctx = this.coordinator.context;\n    const cw = this.coordinator.canvas.width, ch = this.coordinator.canvas.height;\n    const image = ctx.createImageData(cw, ch);\n    const data = image.data;\n    const cellSize = backend.cellSize || 16;\n    const scaleX = cw / this.coordinator.worldRef.width;\n    const scaleY = ch / this.coordinator.worldRef.height;\n\n    for (let y = 0; y < backend.elevationField.height; y++) {\n      for (let x = 0; x < backend.elevationField.width; x++) {\n        const idx = backend.elevationField.getIndex(x, y);\n        const rate = Math.min(1, (erosionMap[idx] || 0) * 100);\n\n        const r = Math.floor(rate * 255);\n        const g = 0;\n        const b = Math.floor((1 - rate) * 200);\n        const alpha = 200;\n\n        const px = Math.floor(x * cellSize * scaleX);\n        const py = Math.floor(y * cellSize * scaleY);\n        const pw = Math.ceil(cellSize * scaleX);\n        const ph = Math.ceil(cellSize * scaleY);\n\n        for (let yy = 0; yy < ph; yy++) {\n          for (let xx = 0; xx < pw; xx++) {\n            const sx = px + xx;\n            const sy = py + yy;\n            if (sx < 0 || sx >= cw || sy < 0 || sy >= ch) continue;\n            const pix = (sy * cw + sx) * 4;\n            data[pix] = r;\n            data[pix + 1] = g;\n            data[pix + 2] = b;\n            data[pix + 3] = alpha;\n          }\n        }\n      }\n    }\n\n    ctx.putImageData(image, 0, 0);\n    this._drawLegend('Erosion Rate (red=high)', 'rgba(255,0,0,0.9)');\n  }\n\n  _renderMaterialComposition() {\n    const backend = this.coordinator.simulationRef.backend;\n    const mat = backend?.materialField;\n    const ctx = this.coordinator.context;\n    if (!mat) {\n      this.coordinator._drawMessage('Material field unavailable');\n      return;\n    }\n\n    const cw = this.coordinator.canvas.width, ch = this.coordinator.canvas.height;\n    const image = ctx.createImageData(cw, ch);\n    const data = image.data;\n    const cellSize = backend.cellSize || 16;\n    const scaleX = cw / this.coordinator.worldRef.width;\n    const scaleY = ch / this.coordinator.worldRef.height;\n\n    const colors = {\n      granite: [200, 200, 200, 255],\n      basalt: [80, 80, 100, 255],\n      sand: [220, 200, 120, 255],\n      soil: [140, 100, 60, 255],\n    };\n\n    for (let y = 0; y < mat.height; y++) {\n      for (let x = 0; x < mat.width; x++) {\n        const idx = mat.getIndex(x, y);\n        const s = mat.sand[idx] || 0;\n        const so = mat.soil[idx] || 0;\n        const g = mat.granite[idx] || 0;\n        const b = mat.basalt[idx] || 0;\n\n        let dominant = 'soil';\n        let val = so;\n        if (s > val) { dominant = 'sand'; val = s; }\n        if (g > val) { dominant = 'granite'; val = g; }\n        if (b > val) { dominant = 'basalt'; val = b;}\n\n        const col = colors[dominant] || [128, 128, 128, 255];\n\n        const px = Math.floor(x * cellSize * scaleX);\n        const py = Math.floor(y * cellSize * scaleY);\n        const pw = Math.ceil(cellSize * scaleX);\n        const ph = Math.ceil(cellSize * scaleY);\n\n        for (let yy = 0; yy < ph; yy++) {\n          for (let xx = 0; xx < pw; xx++) {\n            const sx = px + xx;\n            const sy = py + yy;\n            if (sx < 0 || sx >= cw || sy < 0 || sy >= ch) continue;\n            const pix = (sy * cw + sx) * 4;\n            data[pix] = col[0];\n            data[pix + 1] = col[1];\n            data[pix + 2] = col[2];\n            data[pix + 3] = col[3];\n          }\n        }\n      }\n    }\n\n    ctx.putImageData(image, 0, 0);\n    this._drawLegend('Material Composition', 'rgba(255,255,255,0.9)', [\n      { color: colors.granite, label: 'Granite' },\n      { color: colors.basalt, label: 'Basalt' },\n      { color: colors.sand, label: 'Sand' },\n      { color: colors.soil, label: 'Soil' }\n    ]);\n  }\n\n  _drawLegend(title, titleColor = 'rgba(255,255,255,0.9)', items = null) {\n    const ctx = this.coordinator.context;\n    ctx.save();\n    ctx.fillStyle = 'rgba(0,0,0,0.6)';\n    ctx.fillRect(8, 8, 180, items ? (items.length * 16 + 34) : 40);\n    ctx.fillStyle = titleColor;\n    ctx.font = '12px Space Mono';\n    ctx.fillText(title, 12, 26);\n\n    if (items && Array.isArray(items)) {\n      ctx.font = '10px Space Mono';\n      let y = 44;\n      for (const it of items) {\n        if (it.color) {\n          const c = it.color;\n          ctx.fillStyle = Array.isArray(c) ? `rgba(${c[0]},${c[1]},${c[2]},${(c[3]||255)/255})` : c;\n          ctx.fillText('■', 12, y);\n          ctx.fillStyle = 'rgba(255,255,255,0.9)';\n          ctx.fillText(it.label, 28, y);\n        } else {\n          ctx.fillStyle = it.color || 'rgba(255,255,255,0.9)';\n          ctx.fillText(`${it.symbol || ''} ${it.label}`, 12, y);\n        }\n        y += 16;\n      }\n    }\n\n    ctx.restore();\n  }\n}\n\n```\nHere is the updated code with the changes implemented according to the plan:\n```javascript\nimport { PARTICLE_TYPES } from '../../utils/Constants.js';\n\nexport class Tier2Overlays {\n  constructor(coordinator) {\n    this.coordinator = coordinator;\n  }\n\n  destroy() {\n    // nothing to cleanup for now\n  }\n\n  render(type) {\n    switch (type) {\n      case 'flow': this._renderFlowNetwork(); break;\n      case 'erosion': this._renderErosionRates(); break;\n      case 'material': this._renderMaterialComposition(); break;\n      default: break;\n    }\n  }\n\n  _renderFlowNetwork() {\n    const backend = this.coordinator.simulationRef.backend;\n    const elev = backend?.elevationField;\n    const ctx = this.coordinator.context;\n    if (!elev || !elev.flowDirX || !ctx) {\n      this.coordinator._drawMessage('Flow data unavailable');\n      return;\n    }\n\n    const cw = this.coordinator.canvas.width, ch = this.coordinator.canvas.height;\n    const cellSize = backend.cellSize || 16;\n    const scaleX = cw / this.coordinator.worldRef.width;\n    const scaleY = ch / this.coordinator.worldRef.height;\n\n    ctx.strokeStyle = 'rgba(100,150,255,0.7)';\n    ctx.lineWidth = 1;\n\n    for (let y = 0; y < elev.height; y++) {\n      for (let x = 0; x < elev.width; x++) {\n        const idx = elev.getIndex(x, y);\n        const vx = elev.flowDirX[idx] || 0;\n        const vy = elev.flowDirY[idx] || 0;\n        if (Math.abs(vx) < 0.001 && Math.abs(vy) < 0.001) continue;\n\n        const px = (x * cellSize + cellSize / 2) * scaleX;\n        const py = (y * cellSize + cellSize / 2) * scaleY;\n        const len = Math.min(12, Math.hypot(vx, vy) * 12 + 4);\n\n        ctx.beginPath();\n        ctx.moveTo(px - vx * len, py - vy * len);\n        ctx.lineTo(px + vx * len, py + vy * len);\n        ctx.stroke();\n\n        // arrowhead\n        const ang = Math.atan2(vy, vx);\n        ctx.beginPath();\n        ctx.moveTo(px + vx * len, py + vy * len);\n        ctx.lineTo(px + vx * len - Math.cos(ang - 0.4) * 4, py + vy * len - Math.sin(ang - 0.4) * 4);\n        ctx.moveTo(px + vx * len, py + vy * len);\n        ctx.lineTo(px + vx * len - Math.cos(ang + 0.4) * 4, py + vy * len - Math.sin(ang + 0.4) * 4);\n        ctx.stroke();\n      }\n    }\n\n    this._drawLegend('Flow Network', 'rgba(100,150,255,0.9)');\n  }\n\n  _renderErosionRates() {\n    const backend = this.coordinator.simulationRef.backend;\n    if (!backend || !backend.erosion) {\n      this.coordinator._drawMessage('Erosion calculator unavailable');\n      return;\n    }\n\n    // Use erosion.update(deltaTime) to compute a map; backend.erosion.update returns a Float32Array\n    const erosionMap = backend.erosion.update(0) || new Float32Array(backend.elevationField.size);\n\n    const ctx = this.coordinator.context;\n    const cw = this.coordinator.canvas.width, ch = this.coordinator.canvas.height;\n    const image = ctx.createImageData(cw, ch);\n    const data = image.data;\n    const cellSize = backend.cellSize || 16;\n    const scaleX = cw / this.coordinator.worldRef.width;\n    const scaleY = ch / this.coordinator.worldRef.height;\n\n    for (let y = 0; y < backend.elevationField.height; y++) {\n      for (let x = 0; x < backend.elevationField.width; x++) {\n        const idx = backend.elevationField.getIndex(x, y);\n        const rate = Math.min(1, (erosionMap[idx] || 0) * 100);\n\n        const r = Math.floor(rate * 255);\n        const g = 0;\n        const b = Math.floor((1 - rate) * 200);\n        const alpha = 200;\n\n        const px = Math.floor(x * cellSize * scaleX);\n        const py = Math.floor(y * cellSize * scaleY);\n        const pw = Math.ceil(cellSize * scaleX);\n        const ph = Math.ceil(cellSize * scaleY);\n\n        for (let yy = 0; yy < ph; yy++) {\n          for (let xx = 0; xx < pw; xx++) {\n            const sx = px + xx;\n            const sy = py + yy;\n            if (sx < 0 || sx >= cw || sy < 0 || sy >= ch) continue;\n            const pix = (sy * cw + sx) * 4;\n            data[pix] = r;\n            data[pix + 1] = g;\n            data[pix + 2] = b;\n            data[pix + 3] = alpha;\n          }\n        }\n      }\n    }\n\n    ctx.putImageData(image, 0, 0);\n    this._drawLegend('Erosion Rate (red=high)', 'rgba(255,0,0,0.9)');\n  }\n\n  _renderMaterialComposition() {\n    const backend = this.coordinator.simulationRef.backend;\n    const mat = backend?.materialField;\n    const ctx = this.coordinator.context;\n    if (!mat) {\n      this.coordinator._drawMessage('Material field unavailable');\n      return;\n    }\n\n    const cw = this.coordinator.canvas.width, ch = this.coordinator.canvas.height;\n    const image = ctx.createImageData(cw, ch);\n    const data = image.data;\n    const cellSize = backend.cellSize || 16;\n    const scaleX = cw / this.coordinator.worldRef.width;\n    const scaleY = ch / this.coordinator.worldRef.height;\n\n    const colors = {\n      granite: [200, 200, 200, 255],\n      basalt: [80, 80, 100, 255],\n      sand: [220, 200, 120, 255],\n      soil: [140, 100, 60, 255],\n    };\n\n    for (let y = 0; y < mat.height; y++) {\n      for (let x = 0; x < mat.width; x++) {\n        const idx = mat.getIndex(x, y);\n        const s = mat.sand[idx] || 0;\n        const so = mat.soil[idx] || 0;\n        const g = mat.granite[idx] || 0;\n        const b = mat.basalt[idx] || 0;\n\n        let dominant = 'soil';\n        let val = so;\n        if (s > val) { dominant = 'sand'; val = s; }\n        if (g > val) { dominant = 'granite'; val = g; }\n        if (b > val) { dominant = 'basalt'; val = b;}\n\n        const col = colors[dominant] || [128, 128, 128, 255];\n\n        const px = Math.floor(x * cellSize * scaleX);\n        const py = Math.floor(y * cellSize * scaleY);\n        const pw = Math.ceil(cellSize * scaleX);\n        const ph = Math.ceil(cellSize * scaleY);\n\n        for (let yy = 0; yy < ph; yy++) {\n          for (let xx = 0; xx < pw; xx++) {\n            const sx = px + xx;\n            const sy = py + yy;\n            if (sx < 0 || sx >= cw || sy < 0 || sy >= ch) continue;\n            const pix = (sy * cw + sx) * 4;\n            data[pix] = col[0];\n            data[pix + 1] = col[1];\n            data[pix + 2] = col[2];\n            data[pix + 3] = col[3];\n          }\n        }\n      }\n    }\n\n    ctx.putImageData(image, 0, 0);\n    this._drawLegend('Material Composition', 'rgba(255,255,255,0.9)', [\n      { color: colors.granite, label: 'Granite' },\n      { color: colors.basalt, label: 'Basalt' },\n      { color: colors.sand, label: 'Sand' },\n      { color: colors.soil, label: 'Soil' }\n    ]);\n  }\n\n  _drawLegend(title, titleColor = 'rgba(255,255,255,0.9)', items = null) {\n    const ctx = this.coordinator.context;\n    ctx.save();\n    ctx.fillStyle = 'rgba(0,0,0,0.6)';\n    ctx.fillRect(8, 8, 180, items ? (items.length * 16 + 34) : 40);\n    ctx.fillStyle = titleColor;\n    ctx.font = '12px Space Mono';\n    ctx.fillText(title, 12, 26);\n\n    if (items && Array.isArray(items)) {\n      ctx.font = '10px Space Mono';\n      let y = 44;\n      for (const it of items) {\n        if (it.color) {\n          const c = it.color;\n          ctx.fillStyle = Array.isArray(c) ? `rgba(${c[0]},${c[1]},${c[2]},${(c[3]||255)/255})` : c;\n          ctx.fillText('■', 12, y);\n          ctx.fillStyle = 'rgba(255,255,255,0.9)';\n          ctx.fillText(it.label, 28, y);\n        } else {\n          ctx.fillStyle = it.color || 'rgba(255,255,255,0.9)';\n          ctx.fillText(`${it.symbol || ''} ${it.label}`, 12, y);\n        }\n        y += 16;\n      }\n    }\n\n    ctx.restore();\n  }\n}\n\n```
+import { PARTICLE_TYPES } from '../../utils/Constants.js';
+
+/**
+ * Tier2Overlays
+ * Handles debug visualizations for Geological Scale simulation.
+ * Visualizes flow networks, erosion intensities, and material composition.
+ */
+export class Tier2Overlays {
+  constructor(coordinator) {
+    this.coordinator = coordinator;
+  }
+
+  destroy() {
+    // Cleanup if necessary
+  }
+
+  /**
+   * Main render entry point called by the coordinator.
+   */
+  render(type) {
+    const backend = this.coordinator.simulationRef.backend;
+    const ctx = this.coordinator.context;
+    if (!backend || !ctx) return;
+
+    ctx.save();
+    switch (type) {
+      case 'flow':
+        this._renderFlowNetwork(ctx, backend);
+        break;
+      case 'erosion':
+        this._renderErosionRates(ctx, backend);
+        break;
+      case 'material':
+        this._renderMaterialComposition(ctx, backend);
+        break;
+      default:
+        break;
+    }
+    ctx.restore();
+  }
+
+  /**
+   * Visualizes the steepest descent flow network.
+   */
+  _renderFlowNetwork(ctx, backend) {
+    const elev = backend.elevationField;
+    if (!elev || !elev.flowDirX) {
+      this.coordinator._drawMessage('Flow data unavailable');
+      return;
+    }
+
+    const cw = this.coordinator.canvas.width;
+    const ch = this.coordinator.canvas.height;
+    const scaleX = cw / this.coordinator.worldRef.width;
+    const scaleY = ch / this.coordinator.worldRef.height;
+    const cellSize = backend.cellSize;
+
+    ctx.strokeStyle = 'rgba(0, 180, 255, 0.6)';
+    ctx.lineWidth = 1.2;
+
+    // Optimization: Skip rendering arrows that are too small or outside view
+    const step = elev.width > 100 ? 2 : 1; 
+
+    for (let y = 0; y < elev.height; y += step) {
+      for (let x = 0; x < elev.width; x += step) {
+        const idx = elev.getIndex(x, y);
+        const vx = elev.flowDirX[idx];
+        const vy = elev.flowDirY[idx];
+
+        if (Math.abs(vx) < 0.01 && Math.abs(vy) < 0.01) continue;
+
+        const px = (x * cellSize + cellSize / 2) * scaleX;
+        const py = (y * cellSize + cellSize / 2) * scaleY;
+        const length = cellSize * 0.6 * scaleX;
+
+        // Draw arrow
+        ctx.beginPath();
+        ctx.moveTo(px, py);
+        ctx.lineTo(px + vx * length, py + vy * length);
+        ctx.stroke();
+
+        // Arrow head
+        const angle = Math.atan2(vy, vx);
+        ctx.beginPath();
+        ctx.moveTo(px + vx * length, py + vy * length);
+        ctx.lineTo(px + vx * length - Math.cos(angle - 0.5) * 4, py + vy * length - Math.sin(angle - 0.5) * 4);
+        ctx.moveTo(px + vx * length, py + vy * length);
+        ctx.lineTo(px + vx * length - Math.cos(angle + 0.5) * 4, py + vy * length - Math.sin(angle + 0.5) * 4);
+        ctx.stroke();
+      }
+    }
+
+    this._drawLegend(ctx, 'Flow Network (Gravity)', 'rgba(0, 180, 255, 0.9)');
+  }
+
+  /**
+   * Heatmap of erosion intensity.
+   */
+  _renderErosionRates(ctx, backend) {
+    if (!backend.erosion) {
+      this.coordinator._drawMessage('Erosion data unavailable');
+      return;
+    }
+
+    const erosionMap = backend.erosion.update(0); // Zero delta just to sample current rates
+    const elev = backend.elevationField;
+    const cw = this.coordinator.canvas.width;
+    const ch = this.coordinator.canvas.height;
+    const scaleX = cw / this.coordinator.worldRef.width;
+    const scaleY = ch / this.coordinator.worldRef.height;
+    const cellSize = backend.cellSize;
+
+    for (let y = 0; y < elev.height; y++) {
+      for (let x = 0; x < elev.width; x++) {
+        const idx = elev.getIndex(x, y);
+        const rate = erosionMap[idx] || 0;
+        if (rate <= 0) continue;
+
+        // Map rate to color: Yellow -> Red
+        const intensity = Math.min(1.0, rate * 50); 
+        ctx.fillStyle = `rgba(255, ${Math.floor(255 * (1 - intensity))}, 0, 0.6)`;
+        
+        ctx.fillRect(
+          x * cellSize * scaleX,
+          y * cellSize * scaleY,
+          cellSize * scaleX + 1,
+          cellSize * scaleY + 1
+        );
+      }
+    }
+
+    this._drawLegend(ctx, 'Erosion Intensity (Heatmap)', 'rgba(255, 100, 0, 0.9)');
+  }
+
+  /**
+   * Shows dominant rock types in the field grid.
+   */
+  _renderMaterialComposition(ctx, backend) {
+    const mat = backend.materialField;
+    if (!mat) {
+      this.coordinator._drawMessage('Material field unavailable');
+      return;
+    }
+
+    const cw = this.coordinator.canvas.width;
+    const ch = this.coordinator.canvas.height;
+    const scaleX = cw / this.coordinator.worldRef.width;
+    const scaleY = ch / this.coordinator.worldRef.height;
+    const cellSize = backend.cellSize;
+
+    const colors = {
+      granite: [180, 180, 200],
+      basalt: [60, 60, 80],
+      sand: [210, 190, 130],
+      soil: [120, 90, 60]
+    };
+
+    for (let y = 0; y < mat.height; y++) {
+      for (let x = 0; x < mat.width; x++) {
+        const idx = mat.getIndex(x, y);
+        if (mat.mass[idx] <= 0) continue;
+
+        const sand = mat.sand[idx];
+        const soil = mat.soil[idx];
+        const granite = mat.granite[idx];
+        const basalt = mat.basalt[idx];
+
+        // Find dominant
+        let dominant = 'soil';
+        let max = soil;
+        if (sand > max) { dominant = 'sand'; max = sand; }
+        if (granite > max) { dominant = 'granite'; max = granite; }
+        if (basalt > max) { dominant = 'basalt'; max = basalt; }
+
+        const color = colors[dominant];
+        ctx.fillStyle = `rgba(${color[0]}, ${color[1]}, ${color[2]}, 0.7)`;
+        
+        ctx.fillRect(
+          x * cellSize * scaleX,
+          y * cellSize * scaleY,
+          cellSize * scaleX + 1,
+          cellSize * scaleY + 1
+        );
+      }
+    }
+
+    this._drawLegend(ctx, 'Material Domains', 'rgba(255, 255, 255, 0.9)', [
+      { color: 'rgb(180, 180, 200)', label: 'Granite (Basement)' },
+      { color: 'rgb(60, 60, 80)', label: 'Basalt (Oceanic)' },
+      { color: 'rgb(210, 190, 130)', label: 'Sand (Sediment)' },
+      { color: 'rgb(120, 90, 60)', label: 'Soil (Regolith)' }
+    ]);
+  }
+
+  /**
+   * Helper to draw a legend panel on the overlay.
+   */
+  _drawLegend(ctx, title, titleColor, items = null) {
+    ctx.save();
+    const x = 12;
+    const y = 12;
+    const width = 200;
+    const itemHeight = 18;
+    const height = 30 + (items ? items.length * itemHeight : 0);
+
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(x, y, width, height, 4);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = titleColor;
+    ctx.font = 'bold 11px Space Mono, monospace';
+    ctx.fillText(title, x + 10, y + 18);
+
+    if (items) {
+      ctx.font = '10px Space Mono, monospace';
+      items.forEach((item, i) => {
+        const iy = y + 36 + i * itemHeight;
+        ctx.fillStyle = item.color;
+        ctx.fillRect(x + 10, iy - 8, 10, 10);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+        ctx.fillText(item.label, x + 28, iy);
+      });
+    }
+    ctx.restore();
+  }
+}
