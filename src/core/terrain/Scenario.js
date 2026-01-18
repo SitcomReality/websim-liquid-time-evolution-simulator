@@ -1,4 +1,5 @@
 import { PARTICLE_TYPES, TEMPERATURE } from '../../utils/Constants.js';
+import { classifyEnvironment } from '../../biology/PlantEcology.js';
 
 export function generateScenarioTerrain(world, config) {
     const w = world.width, h = world.height;
