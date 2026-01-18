@@ -51,12 +51,14 @@ export class ChunkManager {
     }
 
     isChunkAsleep(chunkId) {
-        // Use new stability system if available
+        // A chunk is NOT asleep if it was explicitly marked active this frame
+        if (this.activeChunks.has(chunkId)) return false;
+
+        // Otherwise check stability system
         const state = this.stability.chunkStates[chunkId];
         // SLEEPING (2) and FOSSIL (3) are asleep
         if (state >= 2) return true;
         
-        // DROWSY chunks update less frequently but aren't fully asleep
         return false;
     }
 

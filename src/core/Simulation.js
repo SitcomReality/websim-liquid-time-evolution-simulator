@@ -1,5 +1,7 @@
 import { TierManager } from './TierManager.js';
 import { Tier1Backend } from './backends/Tier1Backend.js';
+import { Tier2Backend } from './backends/Tier2Backend.js';
+import { Tier3Backend } from './backends/Tier3Backend.js';
 import { TransitionCoordinator } from './state/TransitionCoordinator.js';
 
 export class Simulation {
@@ -21,7 +23,9 @@ export class Simulation {
         
         // Tier management and backend routing
         this.tierManager = new TierManager({
-            getBackendForTier: (_tier) => {
+            getBackendForTier: (tier) => {
+                if (tier.key === 'GEOLOGICAL_SCALE') return new Tier2Backend(this.world);
+                if (tier.key === 'TECTONIC_SCALE') return new Tier3Backend(this.world);
                 return new Tier1Backend(this.world);
             }
         });
@@ -58,8 +62,10 @@ export class Simulation {
         if (!this.backend) return true;
         
         // Calculate how many simulation steps to do based on time scale
-        const stepsToRun = Math.max(1, Math.floor(this.timeScale / 10));
-        const simulationDeltaTime = frameDeltaTime * this.timeScale / stepsToRun;
+        // We want at least one step, and more steps as speed increases for stability and gravity speed
+        const stepsToRun = Math.max(1, Math.floor(this.timeScale / 4));
+        // Distribute the total time jump across the steps
+        const simulationDeltaTime = (frameDeltaTime * this.timeScale) / stepsToRun;
         
         for (let i = 0; i < stepsToRun; i++) {
             this.backend.update(simulationDeltaTime, this.fidelity);

@@ -66,58 +66,39 @@ export class ChunkStability {
    * Analyze a chunk region and return stability score (0..1).
    */
   analyzeChunk(startX, startY, endX, endY) {
-    let velocityScore = 1.0;
-    let tempGradientScore = 1.0;
-    let collapseRiskScore = 1.0;
-    let externalForceScore = 1.0;
-
-    const cellCount = Math.max(1, (endX - startX) * (endY - startY));
-    let sampledCells = 0;
+    let instability = 0;
 
     // Sample region (not every cell for performance)
     const sampleStep = Math.max(1, Math.floor((endX - startX) / 4));
     
     for (let y = startY; y < endY; y += sampleStep) {
       for (let x = startX; x < endX; x += sampleStep) {
-        sampledCells++;
-        
         // 1. Velocity check
         const particle = this.world.getParticle(x, y);
         if (particle !== PARTICLE_TYPES.EMPTY && particle !== PARTICLE_TYPES.BEDROCK) {
-          // Estimate velocity from neighboring particles
+          // Estimate activity
           const v = this.estimateParticleVelocity(x, y);
-          if (v > this.velocityThreshold) {
-            velocityScore -= 0.3; // Active movement detected
-          }
+          if (v > this.velocityThreshold) instability += 0.2;
+          
+          // 4. Structural collapse risk (essential for gravity)
+          const collapseRisk = this.calculateCollapseRisk(x, y);
+          if (collapseRisk > this.collapseRiskThreshold) instability += 0.5;
         }
 
         // 2. Temperature gradient check
         const tempGradient = this.calculateLocalTempGradient(x, y);
-        if (tempGradient > this.tempGradientThreshold) {
-          tempGradientScore -= 0.25; // Active heat flow
-        }
+        if (tempGradient > this.tempGradientThreshold) instability += 0.1;
 
         // 3. External force check (wind/pressure)
         const wind = this.world.getWind(x, y);
         const pressure = this.world.getPressure(x, y);
         const windMagnitude = Math.sqrt(wind.vx * wind.vx + wind.vy * wind.vy);
         const forceIntensity = windMagnitude + Math.abs(pressure - 1.0);
-        
-        if (forceIntensity > this.externalForceThreshold) {
-          externalForceScore -= 0.2; // External forces active
-        }
-
-        // 4. Structural collapse risk
-        const collapseRisk = this.calculateCollapseRisk(x, y);
-        if (collapseRisk > this.collapseRiskThreshold) {
-          collapseRiskScore -= 0.35; // Instability detected
-        }
+        if (forceIntensity > this.externalForceThreshold) instability += 0.05;
       }
     }
 
-    // Average scores
-    const avgScore = (velocityScore + tempGradientScore + externalForceScore + collapseRiskScore) / 4;
-    return Math.max(0, Math.min(1, avgScore));
+    return Math.max(0, Math.min(1, instability));
   }
 
   /**
@@ -212,28 +193,24 @@ export class ChunkStability {
   /**
    * Update chunk state based on stability score and history.
    */
-  updateChunkState(chunkId, stability, deltaTime) {
+  updateChunkState(chunkId, instability, deltaTime) {
     const currentState = this.chunkStates[chunkId];
 
-    // Recently woken chunks stay at least drowsy
+    // Recently woken chunks stay active
     if (this.wokenTicks[chunkId] > 0) {
       this.wokenTicks[chunkId]--;
-      if (currentState === 2) { // SLEEPING -> DROWSY
-        this.chunkStates[chunkId] = 1; // DROWSY
-      }
+      this.chunkStates[chunkId] = 0; // Force ACTIVE
       return;
     }
 
-    // Determine target state based on stability
+    // Determine target state based on instability
     let targetState;
-    if (stability > 0.8) {
-      targetState = 0; // ACTIVE: very unstable
-    } else if (stability > 0.5) {
-      targetState = 1; // DROWSY: moderately stable
-    } else if (stability > 0.1) {
-      targetState = 2; // SLEEPING: very stable
+    if (instability > 0.15) {
+      targetState = 0; // ACTIVE
+    } else if (instability > 0.02) {
+      targetState = 1; // DROWSY
     } else {
-      targetState = 3; // FOSSIL: essentially inert
+      targetState = 2; // SLEEPING
     }
 
     // Deep bedrock is always FOSSIL

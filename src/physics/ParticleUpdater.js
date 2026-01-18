@@ -56,8 +56,8 @@ export class ParticleUpdater {
             return true;
         });
         
-        // Skip sleeping chunks
-        const awakeChunksFinal = awakeChunks.filter(id => !this.world.isChunkAsleep(id));
+        // Chunks were already filtered for sleep status in awakeChunks
+        const awakeChunksFinal = awakeChunks;
         
         // Shuffle chunks to avoid directional bias
         for (let i = awakeChunksFinal.length - 1; i > 0; i--) {

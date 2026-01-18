@@ -136,6 +136,9 @@ export class UnifiedFluidUpdater {
             // Free fall
             this.world.swapParticles(x, y, x, y + 1);
             this.world.setUpdated(x, y + 1);
+            // Ensure both chunks stay awake for continuous falling
+            this.world.markChunkActive(x, y);
+            this.world.markChunkActive(x, y + 1);
             return true;
         }
 
@@ -166,6 +169,8 @@ export class UnifiedFluidUpdater {
             if (Math.random() < moveChance) {
                 this.world.swapParticles(x, y, x, y + 1);
                 this.world.setUpdated(x, y + 1);
+                this.world.markChunkActive(x, y);
+                this.world.markChunkActive(x, y + 1);
                 return true;
             }
         }
