@@ -1,4 +1,4 @@
-import { TEMPERATURE } from '../../utils/Constants.js';
+import { TEMPERATURE } from '../../../utils/Constants.js';
 
 /** 
  * RegionalClimate
