@@ -46,6 +46,9 @@ export default class App {
         });
 
         openNewGameModalBtn.addEventListener('click', () => {
+            // Hide the splash screen and show the main app, then open the new game modal
+            splashScreen.classList.add('hidden');
+            appContainer.classList.remove('hidden');
             newGameModal.classList.remove('hidden');
         });
     }
